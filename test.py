@@ -127,7 +127,7 @@ def run_inference(data_loader, model, criterion, bit_width):
             output = model(input)
             loss = criterion(output, target)
 
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 1))
             average_ac.update(prec1.item())
             average_t5.update(prec5.item())
 

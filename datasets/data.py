@@ -3,10 +3,12 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from .svhn import SVHNMIX
 from .cifar10 import CIFAR10
+from .publicFallDetector import PublicFallDetector
 
 data_root = os.path.dirname(os.path.realpath(__file__)) + '/../data'
 data_paths = {
     'cifar10': os.path.join(data_root, 'cifar10'),
+    'publicFallDetector': os.path.join(data_root, 'data201307'),
     'cifar100': os.path.join(data_root, 'cifar100'),
     'mnist': os.path.join(data_root, 'mnist'),
     'svhn': os.path.join(data_root, 'svhn'),
@@ -17,6 +19,7 @@ data_paths = {
 }
 
 data_means = {
+    'publicFallDetector': [x / 255 for x in [128, 128, 128]],
     'cifar10': [x / 255 for x in [125.3, 123.0, 113.9]],
     'cifar100': [x / 255 for x in [129.3, 124.1, 112.4]],
     'mnist': [0.1307],
@@ -25,6 +28,7 @@ data_means = {
 }
 
 data_stds = {
+    'publicFallDetector': [x / 255 for x in [64, 64, 64]],
     'cifar10': [x / 255 for x in [63.0, 62.1, 66.7]],
     'cifar100': [x / 255 for x in [68.2, 65.4, 70.4]],
     'mnist': [0.3081],
@@ -34,7 +38,13 @@ data_stds = {
 
 
 def get_dataset(name, split='train', transform=None, target_transform=None, download=True):
-    if name == 'cifar10':
+    if name == 'publicFallDetector':
+        dataset = PublicFallDetector(root=data_paths['publicFallDetector'],
+                                     split=split,
+                                     transform=transform,
+                                     target_transform=target_transform)
+        dataset.num_classes = 2
+    elif name == 'cifar10':
         dataset = CIFAR10(root=data_paths['cifar10'],
                           split=split,
                           transform=transform,
@@ -77,29 +87,40 @@ def get_dataset(name, split='train', transform=None, target_transform=None, down
 def get_transform(dataset, split):
     mean = data_means[dataset]
     std = data_stds[dataset]
-    if 'cifar10' in dataset:
+    if 'publicFallDetector' in dataset:
         t = {
             'train':
-            transforms.Compose([
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomCrop(32, padding=4),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std)
-            ]),
+                transforms.Compose([
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std)
+                ]),
             'val':
-            transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
+                transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
+        }
+    elif 'cifar10' in dataset:
+        t = {
+            'train':
+                transforms.Compose([
+                    transforms.RandomHorizontalFlip(),
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std)
+                ]),
+            'val':
+                transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         }
     elif 'cifar100' in dataset:
         t = {
             'train':
-            transforms.Compose([
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomCrop(32, padding=4),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std)
-            ]),
+                transforms.Compose([
+                    transforms.RandomHorizontalFlip(),
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std)
+                ]),
             'val':
-            transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
+                transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         }
     elif 'mnist' in dataset:
         t = {
@@ -109,33 +130,33 @@ def get_transform(dataset, split):
     elif 'svhn' in dataset:
         t = {
             'train':
-            transforms.Compose([transforms.Resize(40),
-                                transforms.ToTensor(),
-                                transforms.Normalize(mean, std)]),
+                transforms.Compose([transforms.Resize(40),
+                                    transforms.ToTensor(),
+                                    transforms.Normalize(mean, std)]),
             'train_extra':
-            transforms.Compose([transforms.Resize(40),
-                                transforms.ToTensor(),
-                                transforms.Normalize(mean, std)]),
+                transforms.Compose([transforms.Resize(40),
+                                    transforms.ToTensor(),
+                                    transforms.Normalize(mean, std)]),
             'val':
-            transforms.Compose([transforms.Resize(40),
-                                transforms.ToTensor(),
-                                transforms.Normalize(mean, std)])
+                transforms.Compose([transforms.Resize(40),
+                                    transforms.ToTensor(),
+                                    transforms.Normalize(mean, std)])
         }
     elif 'imagenet' in dataset:
         t = {
             'train':
-            transforms.Compose([
-                transforms.RandomResizedCrop(224),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std)
-            ]),
+                transforms.Compose([
+                    transforms.RandomResizedCrop(224),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std)
+                ]),
             'val':
-            transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std)
-            ])
+                transforms.Compose([
+                    transforms.Resize(256),
+                    transforms.CenterCrop(224),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std)
+                ])
         }
     return t[split]
