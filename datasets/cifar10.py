@@ -175,3 +175,10 @@ class CIFAR10(data.Dataset):
         tar.extractall()
         tar.close()
         os.chdir(cwd)
+
+if __name__ == '__main__':
+    data_root = os.path.dirname(os.path.realpath(__file__)) + '/../data'
+    CIFAR10(root=os.path.join(data_root, 'cifar10'),
+                       split='train',
+                       transform=None,
+                       target_transform=None, download=True)

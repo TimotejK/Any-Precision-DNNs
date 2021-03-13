@@ -4,11 +4,13 @@ import torchvision.transforms as transforms
 from .svhn import SVHNMIX
 from .cifar10 import CIFAR10
 from .publicFallDetector import PublicFallDetector
+from .activityRecognitionDataset import ActivityRecognitionDataset
 
 data_root = os.path.dirname(os.path.realpath(__file__)) + '/../data'
 data_paths = {
     'cifar10': os.path.join(data_root, 'cifar10'),
     'publicFallDetector': os.path.join(data_root, 'data201307'),
+    'activityRecognition': os.path.join(data_root, 'UCI HAR Dataset'),
     'cifar100': os.path.join(data_root, 'cifar100'),
     'mnist': os.path.join(data_root, 'mnist'),
     'svhn': os.path.join(data_root, 'svhn'),
@@ -20,6 +22,7 @@ data_paths = {
 
 data_means = {
     'publicFallDetector': [x / 255 for x in [128, 128, 128]],
+    'activityRecognition': [x / 255 for x in [127, 127, 127]],
     'cifar10': [x / 255 for x in [125.3, 123.0, 113.9]],
     'cifar100': [x / 255 for x in [129.3, 124.1, 112.4]],
     'mnist': [0.1307],
@@ -29,6 +32,7 @@ data_means = {
 
 data_stds = {
     'publicFallDetector': [x / 255 for x in [64, 64, 64]],
+    'activityRecognition': [x / 255 for x in [45, 45, 45]],
     'cifar10': [x / 255 for x in [63.0, 62.1, 66.7]],
     'cifar100': [x / 255 for x in [68.2, 65.4, 70.4]],
     'mnist': [0.3081],
@@ -44,6 +48,12 @@ def get_dataset(name, split='train', transform=None, target_transform=None, down
                                      transform=transform,
                                      target_transform=target_transform)
         dataset.num_classes = 2
+    elif name == 'activityRecognition':
+        dataset = ActivityRecognitionDataset(root=data_paths['activityRecognition'],
+                                     split=split,
+                                     transform=transform,
+                                     target_transform=target_transform)
+        dataset.num_classes = 6
     elif name == 'cifar10':
         dataset = CIFAR10(root=data_paths['cifar10'],
                           split=split,
@@ -88,6 +98,17 @@ def get_transform(dataset, split):
     mean = data_means[dataset]
     std = data_stds[dataset]
     if 'publicFallDetector' in dataset:
+        t = {
+            'train':
+                transforms.Compose([
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean, std)
+                ]),
+            'val':
+                transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
+        }
+    elif 'activityRecognition' in dataset:
         t = {
             'train':
                 transforms.Compose([

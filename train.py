@@ -169,7 +169,7 @@ def forward(data_loader, model, criterion, criterion_soft, epoch, training=True,
                     output = model(input)
                     loss = criterion(output, target)
 
-                    prec1, prec5 = accuracy(output.data, target, topk=(1, 1))
+                    prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
                     am_l.update(loss.item(), input.size(0))
                     am_t1.update(prec1.item(), input.size(0))
                     am_t5.update(prec5.item(), input.size(0))
@@ -185,7 +185,7 @@ def forward(data_loader, model, criterion, criterion_soft, epoch, training=True,
             output = model(input)
             loss = criterion(output, target)
             loss.backward()
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 1))
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             losses[-1].update(loss.item(), input.size(0))
             top1[-1].update(prec1.item(), input.size(0))
             top5[-1].update(prec5.item(), input.size(0))
@@ -205,7 +205,7 @@ def forward(data_loader, model, criterion, criterion_soft, epoch, training=True,
                 # recursive supervision
                 target_soft = torch.nn.functional.softmax(output.detach(), dim=1)
 
-                prec1, prec5 = accuracy(output.data, target, topk=(1, 1))
+                prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
                 am_l.update(loss.item(), input.size(0))
                 am_t1.update(prec1.item(), input.size(0))
                 am_t5.update(prec5.item(), input.size(0))
