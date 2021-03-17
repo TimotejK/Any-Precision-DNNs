@@ -34,6 +34,24 @@ def reshape_row(row):
     return result
 
 
+def reshape_data(rows, labels):
+    new_X = []
+    new_labels = []
+    previous_label = 0
+    current_image = None
+    for label, row in zip(labels, rows):
+        if previous_label != label or current_image is None:
+            current_image = [reshape_row(row)]
+            previous_label = label
+        else:
+            current_image.append(reshape_row(row))
+        if len(current_image) == 3:
+            new_X.append(current_image)
+            new_labels.append(label)
+            current_image = None
+    return np.array(new_X), np.array(new_labels)
+
+
 class ActivityRecognitionDataset(data.Dataset):
     def __init__(self, root, split, transform=None, target_transform=None):
         self.root = root
@@ -44,19 +62,17 @@ class ActivityRecognitionDataset(data.Dataset):
         # now load the picked numpy arrays
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
             self.train_data = self.getAllData("train")
-            self.train_labels = self.getDataLabels("train") - 1
-            reshaped_data = np.array(list(map(reshape_row, self.train_data)))
-            self.train_data = np.array([reshaped_data, reshaped_data, reshaped_data])
-            self.train_data = self.train_data.transpose((1, 2, 3, 0))  # convert to HWC
-            self.train_labels = [int(x) for x in self.train_labels]
+            self.train_labels = self.getDataLabels("train")
+            self.train_data, self.train_labels = reshape_data(self.train_data, self.train_labels)
+            self.train_data = self.train_data.transpose((0, 2, 3, 1))  # convert to HWC
+            self.train_labels = [int(x) - 1 for x in self.train_labels]
             pass
         else:
             self.test_data = self.getAllData("test")
-            self.test_labels = self.getDataLabels("test") - 1
-            transformed_data = np.array(list(map(reshape_row, self.test_data)))
-            self.test_data = np.array([transformed_data, transformed_data, transformed_data])
-            self.test_data = self.test_data.transpose((1, 2, 3, 0))  # convert to HWC
-            self.test_labels = [int(x) for x in self.test_labels]
+            self.test_labels = self.getDataLabels("test")
+            self.test_data, self.test_labels = reshape_data(self.test_data, self.test_labels)
+            self.test_data = self.test_data.transpose((0, 2, 3, 1))  # convert to HWC
+            self.test_labels = [int(x) - 1 for x in self.test_labels]
     def __getitem__(self, index):
         """
         Args:
