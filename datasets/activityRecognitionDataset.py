@@ -116,6 +116,7 @@ class ActivityRecognitionDataset(data.Dataset):
             self.train_data, self.train_labels = reshape_data_xyz_color(self.train_data, self.train_labels)
             self.train_data = self.train_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.train_labels = [int(x) - 1 for x in self.train_labels]
+            self.train_features = self.__getFeatures("train")
             pass
         else:
             self.test_data = self.getAllData("test")
@@ -123,6 +124,7 @@ class ActivityRecognitionDataset(data.Dataset):
             self.test_data, self.test_labels = reshape_data_xyz_color(self.test_data, self.test_labels)
             self.test_data = self.test_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.test_labels = [int(x) - 1 for x in self.test_labels]
+            self.test_features = self.__getFeatures("test")
 
     def __getitem__(self, index):
         """
@@ -149,6 +151,15 @@ class ActivityRecognitionDataset(data.Dataset):
 
         return img, target
 
+    def get_features(self, index):
+        if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
+            return self.train_features[index]
+        else:
+            return self.test_features[index]
+
+    def get_feature_names(self):
+        return np.loadtxt(self.root + '/' + 'features.txt', dtype=str)
+
     def __len__(self):
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
             return len(self.train_data)
@@ -168,6 +179,10 @@ class ActivityRecognitionDataset(data.Dataset):
 
     def getDataLabels(self, split):
         data = np.loadtxt(self.root + '/' + split + '/y_' + split + '.txt', dtype=int)
+        return data
+
+    def __getFeatures(self, split):
+        data = np.loadtxt(self.root + '/' + split + '/X_' + split + '.txt', dtype=float)
         return data
 
 

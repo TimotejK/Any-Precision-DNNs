@@ -1,4 +1,5 @@
 import argparse
+import csv
 import os
 import time
 import socket
@@ -51,14 +52,6 @@ def main():
     torch.cuda.set_device(best_gpu)
     torch.backends.cudnn.benchmark = True
 
-    train_transform = get_transform(args.dataset, 'train')
-    train_data = get_dataset(args.dataset, args.train_split, train_transform)
-    train_loader = torch.utils.data.DataLoader(train_data,
-                                               batch_size=args.batch_size,
-                                               shuffle=True,
-                                               num_workers=args.workers,
-                                               pin_memory=True)
-
     val_transform = get_transform(args.dataset, 'val')
     val_data = get_dataset(args.dataset, 'val', val_transform)
     val_loader = torch.utils.data.DataLoader(val_data,
@@ -69,7 +62,7 @@ def main():
 
     bit_width_list = list(map(int, args.bit_width_list.split(',')))
     bit_width_list.sort()
-    model = models.__dict__[args.model](bit_width_list, train_data.num_classes).cuda()
+    model = models.__dict__[args.model](bit_width_list, val_data.num_classes).cuda()
 
     lr_decay = list(map(int, args.lr_decay.split(',')))
     optimizer = get_optimizer_config(model, args.optimizer, args.lr, args.weight_decay)
@@ -110,17 +103,20 @@ def main():
         model.eval()
         bit_width_list = list(map(int, args.bit_width_list.split(',')))
         bit_width_list.sort()
-        for width in bit_width_list:
-            accs = run_inference(val_loader, model, criterion, width)
-            print(width, accs)
+        extract_classification_data(val_loader, model, criterion, bit_width_list, val_data)
+        # for width in bit_width_list:
+        #     pass
+            # accs = run_inference(val_loader, model, criterion, width, val_data)
+            # print(width, accs)
 
 
-def run_inference(data_loader, model, criterion, bit_width):
+def run_inference(data_loader, model, criterion, bit_width, val_data):
     average_ac = AverageMeter()
     average_t5 = AverageMeter()
     acc = [0, 0, 0, 0, 0, 0]
     n = [0, 0, 0, 0, 0, 0]
     for i, (input, target) in enumerate(data_loader):
+        val_data.__getitem__(i)
         with torch.no_grad():
             input = input.cuda()
             target = target.cuda(non_blocking=True)
@@ -145,6 +141,57 @@ def run_inference(data_loader, model, criterion, bit_width):
     #         print(i, ": ", acc[i]/n[i])
     return np.array(acc) / np.array(n)
 
+
+def extract_classification_data(data_loader, model, criterion, bit_width_list, val_data):
+    with open('raw_data_accuracy_raw.csv', mode='w', newline='') as accuracy_file_raw, \
+            open('raw_data_accuracy_features.csv', mode='w', newline='') as accuracy_file_features:
+        field_names = ["raw " + str(i + 1) for i in range(32*32*3)]
+        field_names.append("class")
+        for bit_width in bit_width_list:
+            field_names.append(str(bit_width) + " bit")
+            field_names.append("confidence " + str(bit_width) + " bit")
+        accuracy_file_writer_raw = csv.writer(accuracy_file_raw, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        accuracy_file_writer_raw.writerow(field_names)
+
+        field_names = list(val_data.get_feature_names())
+        field_names.append("class")
+        for bit_width in bit_width_list:
+            field_names.append(str(bit_width) + " bit")
+            field_names.append("confidence " + str(bit_width) + " bit")
+        accuracy_file_writer_features = csv.writer(accuracy_file_features, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        accuracy_file_writer_features.writerow(field_names)
+
+        for i, (input, target) in enumerate(data_loader):
+            with torch.no_grad():
+                input = input.cuda()
+                target = target.cuda(non_blocking=True)
+                rows = [None] * data_loader.batch_size
+                rows_features = [None] * data_loader.batch_size
+                for bit_width in bit_width_list:
+                    model.apply(lambda m: setattr(m, 'wbit', bit_width))
+                    model.apply(lambda m: setattr(m, 'abit', bit_width))
+                    output = model(input)
+                    loss = criterion(output, target)
+                    prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
+                    for j, (p, t) in enumerate(zip(top_class, target)):
+                        if rows[j] is None:
+                            rows[j] = input[j].reshape(32*32*3).tolist()
+                            rows[j].append(int(t))
+                        if rows_features[j] is None:
+                            rows_features[j] = list(val_data.get_features(i * data_loader.batch_size + j))
+                            rows_features[j].append(int(t))
+                        if p[0] == t:
+                            rows[j].append(1)
+                            rows_features[j].append(1)
+                        else:
+                            rows[j].append(0)
+                            rows_features[j].append(0)
+                        rows[j].append(float(prob[j][0]))
+                        rows_features[j].append(float(prob[j][0]))
+                rows = filter(lambda x: x is not None, rows)
+                rows_features = filter(lambda x: x is not None, rows_features)
+                accuracy_file_writer_raw.writerows(rows)
+                accuracy_file_writer_features.writerows(rows_features)
 
 if __name__ == '__main__':
     main()
