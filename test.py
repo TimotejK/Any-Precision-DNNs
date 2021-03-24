@@ -5,6 +5,7 @@ import socket
 import logging
 from datetime import datetime
 from functools import partial
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -12,6 +13,7 @@ import torch.optim
 import torch.utils.data
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
+import torch.nn.functional as nnf
 
 import models
 from models.losses import CrossEntropyLossSoft
@@ -109,14 +111,15 @@ def main():
         bit_width_list = list(map(int, args.bit_width_list.split(',')))
         bit_width_list.sort()
         for width in bit_width_list:
-            t1, t5 = run_inference(val_loader, model, criterion, width)
-            print(width, t1)
-
+            accs = run_inference(val_loader, model, criterion, width)
+            print(width, accs)
 
 
 def run_inference(data_loader, model, criterion, bit_width):
     average_ac = AverageMeter()
     average_t5 = AverageMeter()
+    acc = [0, 0, 0, 0, 0, 0]
+    n = [0, 0, 0, 0, 0, 0]
     for i, (input, target) in enumerate(data_loader):
         with torch.no_grad():
             input = input.cuda()
@@ -126,12 +129,21 @@ def run_inference(data_loader, model, criterion, bit_width):
             model.apply(lambda m: setattr(m, 'abit', bit_width))
             output = model(input)
             loss = criterion(output, target)
-
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 1))
+            prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
+            for p, t in zip(top_class, target):
+                n[t] += 1
+                if p[0] == t:
+                    acc[t] += 1
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             average_ac.update(prec1.item())
             average_t5.update(prec5.item())
 
-    return average_ac.avg, average_t5.avg
+    # for i in range(len(n)):
+    #     if (n[i] == 0):
+    #         print(i, ":  inf")
+    #     else:
+    #         print(i, ": ", acc[i]/n[i])
+    return np.array(acc) / np.array(n)
 
 
 if __name__ == '__main__':
