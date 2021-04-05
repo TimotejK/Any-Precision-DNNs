@@ -11,7 +11,9 @@ import torch.utils.data
 import models
 from datasets.data import get_dataset, get_transform
 from models.losses import CrossEntropyLossSoft
+from optimization_selection.knn_selector import KnnSelector
 from optimization_selection.optimization_selector import OptimizationSelector
+from optimization_selection.trivial_selector import ConstantSelector
 from utils import setup_gpus
 
 parser = argparse.ArgumentParser(description='Training')
@@ -42,10 +44,17 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
     val_transform = get_transform(args.dataset, 'val')
     val_data = get_dataset(args.dataset, 'val', val_transform)
     val_loader = torch.utils.data.DataLoader(val_data,
-                                             batch_size=1,
+                                             batch_size=64,
                                              shuffle=False,
                                              num_workers=args.workers,
                                              pin_memory=True)
+
+    test_data = get_dataset(args.dataset, 'test', val_transform)
+    test_loader = torch.utils.data.DataLoader(test_data,
+                                              batch_size=1,
+                                              shuffle=False,
+                                              num_workers=args.workers,
+                                              pin_memory=True)
 
     bit_width_list = list(map(int, args.bit_width_list.split(',')))
     bit_width_list.sort()
@@ -70,15 +79,18 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
     criterion_soft = CrossEntropyLossSoft().cuda()
 
     model.eval()
+
     optimization_selector.init(bit_width_list)
+    optimization_selector.train(val_loader, val_data, model)
 
     ca = 0
     n = 0
+    selection_sum = 0
 
-    for i, (input, target) in enumerate(val_loader):
-        val_data.__getitem__(i)
+    for i, (input, target) in enumerate(test_loader):
         with torch.no_grad():
-            selection = optimization_selector.select_optimization_level(input[0], val_data.get_features(i))
+            selection = optimization_selector.select_optimization_level(input[0], test_data.get_features(i))
+            selection_sum += selection
             input = input.cuda()
             target = target.cuda(non_blocking=True)
 
@@ -93,12 +105,20 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
             if top_class[0][0] == target[0]:
                 ca += 1
             n += 1
-    print("ca:", ca/n)
-
-
-
-
+    print("ca:", ca / n)
+    print("average_selection:", selection_sum / n)
 
 
 if __name__ == '__main__':
-    test_optimization_selector(OptimizationSelector())
+    # print("Constant 1:")
+    # test_optimization_selector(ConstantSelector(1))
+    # print("Constant 2:")
+    # test_optimization_selector(ConstantSelector(2))
+    # print("Constant 4:")
+    # test_optimization_selector(ConstantSelector(4))
+    # print("Constant 8:")
+    # test_optimization_selector(ConstantSelector(8))
+    # print("Constant 32:")
+    # test_optimization_selector(ConstantSelector(32))
+    print("Knn:")
+    test_optimization_selector(KnnSelector(20))

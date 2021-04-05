@@ -86,10 +86,11 @@ def reshape_data_xyz_color(rows, labels):
             total_acc_x_combined = np.concatenate((total_acc_x_combined, total_acc_x))
             total_acc_y_combined = np.concatenate((total_acc_y_combined, total_acc_y))
             total_acc_z_combined = np.concatenate((total_acc_z_combined, total_acc_z))
-        if len(body_acc_x_combined) * 3 >= 32*32:
-            new_X.append([reshape_row(np.concatenate((body_acc_x_combined, body_gyro_x_combined, total_acc_x_combined))),
-                          reshape_row(np.concatenate((body_acc_y_combined, body_gyro_y_combined, total_acc_y_combined))),
-                          reshape_row(np.concatenate((body_acc_z_combined, body_gyro_z_combined, total_acc_z_combined)))])
+        if len(body_acc_x_combined) * 3 >= 32 * 32:
+            new_X.append(
+                [reshape_row(np.concatenate((body_acc_x_combined, body_gyro_x_combined, total_acc_x_combined))),
+                 reshape_row(np.concatenate((body_acc_y_combined, body_gyro_y_combined, total_acc_y_combined))),
+                 reshape_row(np.concatenate((body_acc_z_combined, body_gyro_z_combined, total_acc_z_combined)))])
             new_labels.append(label)
             indexes_of_used_rows.append(index - 1)
             body_acc_x_combined = None
@@ -116,18 +117,32 @@ class ActivityRecognitionDataset(data.Dataset):
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
             self.train_data = self.getAllData("train")
             self.train_labels = self.getDataLabels("train")
-            self.train_data, self.train_labels, self.indexes = reshape_data_xyz_color(self.train_data, self.train_labels)
+            self.train_data, self.train_labels, self.indexes = reshape_data_xyz_color(self.train_data,
+                                                                                      self.train_labels)
             self.train_data = self.train_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.train_labels = [int(x) - 1 for x in self.train_labels]
             self.train_features = self.__getFeatures("train")
             pass
+        elif self.split == 'val':
+            self.val_data = self.getAllData("test")
+            self.val_labels = self.getDataLabels("test")
+            self.val_features = self.__getFeatures("test")
+            self.val_data = self.val_data[:len(self.val_data) // 2]
+            self.val_labels = self.val_labels[:len(self.val_labels) // 2]
+            self.val_features = self.val_features[:len(self.val_features) // 2]
+            self.val_data, self.val_labels, self.indexes = reshape_data_xyz_color(self.val_data, self.val_labels)
+            self.val_data = self.val_data.transpose((0, 2, 3, 1))  # convert to HWC
+            self.val_labels = [int(x) - 1 for x in self.val_labels]
         else:
             self.test_data = self.getAllData("test")
             self.test_labels = self.getDataLabels("test")
+            self.test_features = self.__getFeatures("test")
+            self.test_data = self.test_data[len(self.test_data) // 2:]
+            self.test_labels = self.test_labels[len(self.test_labels) // 2:]
+            self.test_features = self.test_features[len(self.test_features) // 2:]
             self.test_data, self.test_labels, self.indexes = reshape_data_xyz_color(self.test_data, self.test_labels)
             self.test_data = self.test_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.test_labels = [int(x) - 1 for x in self.test_labels]
-            self.test_features = self.__getFeatures("test")
 
     def __getitem__(self, index):
         """
@@ -139,6 +154,8 @@ class ActivityRecognitionDataset(data.Dataset):
         """
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
             img, target = self.train_data[index], self.train_labels[index]
+        elif self.split == 'val':
+            img, target = self.val_data[index], self.val_labels[index]
         else:
             img, target = self.test_data[index], self.test_labels[index]
 
@@ -157,6 +174,8 @@ class ActivityRecognitionDataset(data.Dataset):
     def get_features(self, index):
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
             return self.train_features[self.indexes[index]]
+        elif self.split == 'val':
+            return self.val_features[self.indexes[index]]
         else:
             return self.test_features[self.indexes[index]]
 
@@ -166,6 +185,8 @@ class ActivityRecognitionDataset(data.Dataset):
     def __len__(self):
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
             return len(self.train_data)
+        elif self.split == 'val':
+            return len(self.val_data)
         else:
             return len(self.test_data)
 
