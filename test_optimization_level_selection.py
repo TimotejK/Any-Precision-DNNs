@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import time
 
 import torch
 import torch.nn as nn
@@ -11,6 +12,7 @@ import torch.utils.data
 import models
 from datasets.data import get_dataset, get_transform
 from models.losses import CrossEntropyLossSoft
+from optimization_selection.confidence_hierarchical_selector import ConfidenceHierarchicalSelector
 from optimization_selection.knn_selector import KnnSelector
 from optimization_selection.optimization_selector import OptimizationSelector
 from optimization_selection.trivial_selector import ConstantSelector
@@ -86,30 +88,39 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
     ca = 0
     n = 0
     selection_sum = 0
+    selection_sum_theoretical = 0
 
+    start_time = time.time()
     for i, (input, target) in enumerate(test_loader):
         with torch.no_grad():
-            selection = optimization_selector.select_optimization_level(input[0], test_data.get_features(i))
-            selection_sum += selection
-            input = input.cuda()
-            target = target.cuda(non_blocking=True)
+            repeat = True
+            while repeat:
+                selection = optimization_selector.select_optimization_level(input[0], test_data.get_features(i))
+                selection_sum += selection
+                input = input.cuda()
+                target = target.cuda(non_blocking=True)
 
-            model.apply(lambda m: setattr(m, 'wbit', selection))
-            model.apply(lambda m: setattr(m, 'abit', selection))
-            output = model(input)
-            loss = criterion(output, target)
-            prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
+                model.apply(lambda m: setattr(m, 'wbit', selection))
+                model.apply(lambda m: setattr(m, 'abit', selection))
+                output = model(input)
+                loss = criterion(output, target)
+                prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
 
-            confidence = prob[0][0]
-            optimization_selector.results(confidence)
+                confidence = prob[0][0]
+                repeat = optimization_selector.results(confidence)
+                if not repeat:
+                    selection_sum_theoretical += selection
             if top_class[0][0] == target[0]:
                 ca += 1
             n += 1
     print("ca:", ca / n)
     print("average_selection:", selection_sum / n)
+    print("average_selection_theoretical:", selection_sum_theoretical / n)
+    print("Time:",  (time.time() - start_time))
 
 
 if __name__ == '__main__':
+    test_optimization_selector(ConfidenceHierarchicalSelector())
     # print("Constant 1:")
     # test_optimization_selector(ConstantSelector(1))
     # print("Constant 2:")
@@ -120,5 +131,5 @@ if __name__ == '__main__':
     # test_optimization_selector(ConstantSelector(8))
     # print("Constant 32:")
     # test_optimization_selector(ConstantSelector(32))
-    print("Knn:")
-    test_optimization_selector(KnnSelector(20))
+    # print("Knn:")
+    # test_optimization_selector(KnnSelector(20))
