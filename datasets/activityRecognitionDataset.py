@@ -122,14 +122,17 @@ class ActivityRecognitionDataset(data.Dataset):
             self.train_data = self.train_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.train_labels = [int(x) - 1 for x in self.train_labels]
             self.train_features = self.__getFeatures("train")
+            self.train_users = self.__getUser("train")
             pass
         elif self.split == 'val':
             self.val_data = self.getAllData("test")
             self.val_labels = self.getDataLabels("test")
             self.val_features = self.__getFeatures("test")
+            self.val_users = self.__getUser("test")
             self.val_data = self.val_data[:len(self.val_data) // 2]
             self.val_labels = self.val_labels[:len(self.val_labels) // 2]
             self.val_features = self.val_features[:len(self.val_features) // 2]
+            self.val_users = self.val_users[:len(self.val_users) // 2]
             self.val_data, self.val_labels, self.indexes = reshape_data_xyz_color(self.val_data, self.val_labels)
             self.val_data = self.val_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.val_labels = [int(x) - 1 for x in self.val_labels]
@@ -137,9 +140,11 @@ class ActivityRecognitionDataset(data.Dataset):
             self.test_data = self.getAllData("test")
             self.test_labels = self.getDataLabels("test")
             self.test_features = self.__getFeatures("test")
+            self.test_users = self.__getUser("test")
             self.test_data = self.test_data[len(self.test_data) // 2:]
             self.test_labels = self.test_labels[len(self.test_labels) // 2:]
             self.test_features = self.test_features[len(self.test_features) // 2:]
+            self.test_users = self.test_users[len(self.test_users) // 2:]
             self.test_data, self.test_labels, self.indexes = reshape_data_xyz_color(self.test_data, self.test_labels)
             self.test_data = self.test_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.test_labels = [int(x) - 1 for x in self.test_labels]
@@ -179,6 +184,14 @@ class ActivityRecognitionDataset(data.Dataset):
         else:
             return self.test_features[self.indexes[index]]
 
+    def get_user(self, index):
+        if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
+            return self.train_users[self.indexes[index]]
+        elif self.split == 'val':
+            return self.val_users[self.indexes[index]]
+        else:
+            return self.test_users[self.indexes[index]]
+
     def get_feature_names(self):
         return np.loadtxt(self.root + '/' + 'features.txt', dtype=str)
 
@@ -207,6 +220,10 @@ class ActivityRecognitionDataset(data.Dataset):
 
     def __getFeatures(self, split):
         data = np.loadtxt(self.root + '/' + split + '/X_' + split + '.txt', dtype=float)
+        return data
+
+    def __getUser(self, split):
+        data = np.loadtxt(self.root + '/' + split + '/subject_' + split + '.txt', dtype=float)
         return data
 
 

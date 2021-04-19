@@ -146,6 +146,7 @@ def extract_classification_data(data_loader, model, criterion, bit_width_list, v
     with open('raw_data_accuracy_raw.csv', mode='w', newline='') as accuracy_file_raw, \
             open('raw_data_accuracy_features.csv', mode='w', newline='') as accuracy_file_features:
         field_names = ["raw " + str(i + 1) for i in range(32*32*3)]
+        field_names.append("user")
         field_names.append("class")
         for bit_width in bit_width_list:
             field_names.append(str(bit_width) + " bit")
@@ -154,6 +155,7 @@ def extract_classification_data(data_loader, model, criterion, bit_width_list, v
         accuracy_file_writer_raw.writerow(field_names)
 
         field_names = list(val_data.get_feature_names())
+        field_names.append("user")
         field_names.append("class")
         for bit_width in bit_width_list:
             field_names.append(str(bit_width) + " bit")
@@ -176,9 +178,11 @@ def extract_classification_data(data_loader, model, criterion, bit_width_list, v
                     for j, (p, t) in enumerate(zip(top_class, target)):
                         if rows[j] is None:
                             rows[j] = input[j].reshape(32*32*3).tolist()
+                            rows[j].append(val_data.get_user(i * data_loader.batch_size + j))
                             rows[j].append(int(t))
                         if rows_features[j] is None:
                             rows_features[j] = list(val_data.get_features(i * data_loader.batch_size + j))
+                            rows_features[j].append(val_data.get_user(i * data_loader.batch_size + j))
                             rows_features[j].append(int(t))
                         if p[0] == t:
                             rows[j].append(1)
