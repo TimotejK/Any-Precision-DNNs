@@ -14,6 +14,7 @@ from datasets.data import get_dataset, get_transform
 from models.losses import CrossEntropyLossSoft
 from optimization_selection.confidence_hierarchical_selector import ConfidenceHierarchicalSelector
 from optimization_selection.knn_selector import KnnSelector
+from optimization_selection.lda_hierarchical_selector import LDAHierarchicalSelector
 from optimization_selection.optimization_selector import OptimizationSelector
 from optimization_selection.trivial_selector import ConstantSelector
 from utils import setup_gpus
@@ -120,16 +121,19 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
 
 
 if __name__ == '__main__':
+    print("Constant 1:")
+    test_optimization_selector(ConstantSelector(1))
+    print("Constant 2:")
+    test_optimization_selector(ConstantSelector(2))
+    print("Constant 4:")
+    test_optimization_selector(ConstantSelector(4))
+    print("Constant 8:")
+    test_optimization_selector(ConstantSelector(8))
+    print("Constant 32:")
+    test_optimization_selector(ConstantSelector(32))
+    print("Knn:")
+    test_optimization_selector(KnnSelector(20))
+    print("Confidence hierarchical:")
     test_optimization_selector(ConfidenceHierarchicalSelector())
-    # print("Constant 1:")
-    # test_optimization_selector(ConstantSelector(1))
-    # print("Constant 2:")
-    # test_optimization_selector(ConstantSelector(2))
-    # print("Constant 4:")
-    # test_optimization_selector(ConstantSelector(4))
-    # print("Constant 8:")
-    # test_optimization_selector(ConstantSelector(8))
-    # print("Constant 32:")
-    # test_optimization_selector(ConstantSelector(32))
-    # print("Knn:")
-    # test_optimization_selector(KnnSelector(20))
+    print("LDA hierarchical:")
+    test_optimization_selector(LDAHierarchicalSelector())

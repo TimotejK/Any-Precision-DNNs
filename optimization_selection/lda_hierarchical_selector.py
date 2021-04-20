@@ -1,24 +1,81 @@
 import torch
 import torch.nn.functional as nnf
-from scipy import spatial
 import numpy as np
 from optimization_selection.optimization_selector import OptimizationSelector
-# import pymc3 as pm
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
-class ConfidenceHierarchicalSelector(OptimizationSelector):
-    def __init__(self, n_groups=5):
+class LDAHierarchicalSelector(OptimizationSelector):
+    def __init__(self, n_groups=3, use_features=True):
         self.confidence = []
         self.train_acc = []
         self.n_groups = n_groups
         self.show_statistics = True
-        self.input_is_active = None
-        self.selected_width = None
         self.target_acc = 0.9
+        self.use_features = use_features
 
     def init(self, optimization_levels):
         self.optimization_levels = optimization_levels[:3]
+
+    def train(self, train_data_loader, train_data, model):
+        groups = self.train_subdimention_models(train_data_loader, train_data)
+        self.get_confidence_and_ca(train_data_loader, model)
+        acc_per_group = self.accuracy_per_group(self.train_acc, groups)
+        self.train_hierarchical_model(acc_per_group)
+
+    def select_optimization_level(self, raw_data: list, features: list) -> float:
+        if self.use_features:
+            group = self.transform_vector(list(features))
+        else:
+            group = self.transform_vector(list(raw_data.reshape(-1)))
+
+        if self.intercepts[int(group)] >= self.target_acc:
+            selected_width = self.optimization_levels[0]
+        else:
+            selected_width = (self.target_acc - self.intercepts[group]) / self.slopes[group]
+
+        return self.closest_available_width(selected_width)
+
+    def transform_vector(self, test_loader):
+        X_test = [test_loader]
+
+        X_test = self.standardScaler.transform(X_test)
+
+        X_test = self.pca.transform(X_test)
+
+        X_test = self.lda.transform(X_test)
+
+        return self.get_group(X_test.reshape(-1))
+
+    def train_subdimention_models(self, train_loader, train_data):
+        X_train = []
+        y_train = []
+        class_train = []
+        for batch_idx, (input, target) in enumerate(train_loader):
+            for ind, (i, t) in enumerate(zip(input, target)):
+                if self.use_features:
+                    X_train.append(train_data.get_features(batch_idx * train_loader.batch_size + ind))
+                else:
+                    X_train.append(i.reshape(-1).tolist())
+                class_train.append(int(t))
+                if int(t) < 3:
+                    y_train.append(1)
+                else:
+                    y_train.append(0)
+
+        self.standardScaler = StandardScaler()
+        X_train = self.standardScaler.fit_transform(X_train)
+
+        self.pca = PCA(n_components=10)
+        X_train = self.pca.fit_transform(X_train)
+
+        self.lda = LDA(n_components=1)
+        X_train = self.lda.fit_transform(X_train, y_train)
+
+        return self.train_groups(X_train.reshape(-1))
 
     def get_confidence_and_ca(self, train_data_loader, model):
         self.confidence = []
@@ -84,46 +141,6 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         if self.show_statistics:
             self.show_model(accuracy_per_group)
 
-    # def train_hierarchical_model_old(self, accuracy_per_group):
-    #     training_set = []
-    #     for group in range(accuracy_per_group.shape[0]):
-    #         for bit_width in range(accuracy_per_group.shape[1]):
-    #             training_set.append([self.optimization_levels[bit_width], group, accuracy_per_group[group, bit_width]])
-    #     training_set = np.array(training_set)
-    #     with pm.Model() as hierarchical_model:
-    #         mu_a = pm.Normal('mu_alpha', mu=0., sd=1)
-    #         sigma_a = pm.HalfCauchy('sigma_alpha', beta=1)
-    #         mu_b = pm.Normal('mu_beta', mu=0., sd=1)
-    #         sigma_b = pm.HalfCauchy('sigma_beta', beta=1)
-    #
-    #         # Intercept
-    #         a = pm.Normal('alpha', mu=mu_a, sd=sigma_a, shape=self.n_groups)
-    #         # Slope
-    #         b = pm.Normal('beta', mu=mu_b, sd=sigma_b, shape=self.n_groups)
-    #
-    #         # Model error
-    #         eps = pm.HalfCauchy('eps', beta=1)
-    #
-    #         # Expected value
-    #         groups = list(range(self.n_groups))
-    #         accuracy_est = a[training_set.astype(int)[:, 1]] + b[training_set.astype(int)[:, 1]] * training_set[:, 0]
-    #
-    #         # Data likelihood
-    #         y_like = pm.Normal('y_like', mu=accuracy_est, sd=eps, observed=training_set[:, 2])
-    #
-    #     with hierarchical_model:
-    #         step = pm.NUTS()
-    #         trace = pm.sample(100, tune=1000, progressbar=False)
-    #         if self.show_statistics:
-    #             pm.traceplot(trace)
-    #             plt.show()
-    #         self.intercepts = np.mean(trace["alpha"], axis=0)
-    #         self.slopes = np.mean(trace["beta"], axis=0)
-    #
-    #     if self.show_statistics:
-    #         self.show_model(training_set)
-
-
     def show_model(self, accuracy_per_group):
         training_set = []
         for group in range(accuracy_per_group.shape[0]):
@@ -143,40 +160,6 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         plt.xlabel("Bit width")
         plt.ylabel("Classification accuracy")
         plt.show()
-
-    def train(self, train_data_loader, train_data, model):
-        self.get_confidence_and_ca(train_data_loader, model)
-        groups = self.train_groups(self.confidence)
-        acc_per_group = self.accuracy_per_group(self.train_acc, groups)
-        self.train_hierarchical_model(acc_per_group)
-
-    def select_optimization_level(self, raw_data: list, features: list) -> float:
-        if not self.input_is_active:
-            self.input_is_active = True
-            return self.optimization_levels[0]
-        else:
-            self.input_is_active = False
-            return self.selected_width
-
-    def results(self, confidence: float) -> bool:
-        confidence = float(confidence)
-        if not self.input_is_active:
-            return False
-
-        conf_group = self.get_group(confidence)
-
-        selected_width = self.optimization_levels[0]
-        if self.intercepts[int(conf_group)] >= self.target_acc:
-            selected_width = self.optimization_levels[0]
-        else:
-            selected_width = (self.target_acc - self.intercepts[conf_group]) / self.slopes[conf_group]
-
-        self.selected_width = self.closest_available_width(selected_width)
-        if self.selected_width > self.optimization_levels[0]:
-            return True
-        else:
-            self.input_is_active = False
-            return False
 
     def closest_available_width(self, width):
         closest_width = self.optimization_levels[0]

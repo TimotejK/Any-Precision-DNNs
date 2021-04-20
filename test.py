@@ -1,5 +1,6 @@
 import argparse
 import csv
+import math
 import os
 import time
 import socket
@@ -103,11 +104,10 @@ def main():
         model.eval()
         bit_width_list = list(map(int, args.bit_width_list.split(',')))
         bit_width_list.sort()
-        extract_classification_data(val_loader, model, criterion, bit_width_list, val_data)
-        # for width in bit_width_list:
-        #     pass
-        #     accs = run_inference(val_loader, model, criterion, width, val_data)
-        #     print(width, accs)
+        # extract_classification_data(val_loader, model, criterion, bit_width_list, val_data)
+        for width in bit_width_list:
+            accs = run_inference(val_loader, model, criterion, width, val_data)
+            print(width, accs, sum(accs)/6)
 
 
 def run_inference(data_loader, model, criterion, bit_width, val_data):
