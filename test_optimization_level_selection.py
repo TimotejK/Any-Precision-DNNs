@@ -87,6 +87,7 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
     optimization_selector.train(val_loader, val_data, model)
 
     ca = 0
+    conf = 0
     n = 0
     selection_sum = 0
     selection_sum_theoretical = 0
@@ -111,29 +112,33 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
                 repeat = optimization_selector.results(confidence)
                 if not repeat:
                     selection_sum_theoretical += selection
+            conf += float(confidence)
             if top_class[0][0] == target[0]:
                 ca += 1
             n += 1
     print("ca:", ca / n)
+    print("Confidence:", conf / n)
     print("average_selection:", selection_sum / n)
     print("average_selection_theoretical:", selection_sum_theoretical / n)
     print("Time:",  (time.time() - start_time))
 
 
 if __name__ == '__main__':
-    print("Constant 1:")
-    test_optimization_selector(ConstantSelector(1))
-    print("Constant 2:")
-    test_optimization_selector(ConstantSelector(2))
-    print("Constant 4:")
-    test_optimization_selector(ConstantSelector(4))
-    print("Constant 8:")
-    test_optimization_selector(ConstantSelector(8))
-    print("Constant 32:")
-    test_optimization_selector(ConstantSelector(32))
-    print("Knn:")
-    test_optimization_selector(KnnSelector(20))
-    print("Confidence hierarchical:")
-    test_optimization_selector(ConfidenceHierarchicalSelector())
-    print("LDA hierarchical:")
-    test_optimization_selector(LDAHierarchicalSelector())
+    test_optimization_selector(KnnSelector(40))
+
+    # print("Constant 1:")
+    # test_optimization_selector(ConstantSelector(1))
+    # print("Constant 2:")
+    # test_optimization_selector(ConstantSelector(2))
+    # print("Constant 4:")
+    # test_optimization_selector(ConstantSelector(4))
+    # print("Constant 8:")
+    # test_optimization_selector(ConstantSelector(8))
+    # print("Constant 32:")
+    # test_optimization_selector(ConstantSelector(32))
+    # print("Knn:")
+    # test_optimization_selector(KnnSelector(20))
+    # print("Confidence hierarchical:")
+    # test_optimization_selector(ConfidenceHierarchicalSelector())
+    # print("LDA hierarchical:")
+    # test_optimization_selector(LDAHierarchicalSelector())

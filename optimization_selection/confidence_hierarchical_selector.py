@@ -18,7 +18,7 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         self.target_acc = 0.9
 
     def init(self, optimization_levels):
-        self.optimization_levels = optimization_levels[:3]
+        self.optimization_levels = optimization_levels
 
     def get_confidence_and_ca(self, train_data_loader, model):
         self.confidence = []

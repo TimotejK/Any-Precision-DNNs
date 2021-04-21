@@ -54,7 +54,7 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     val_transform = get_transform(args.dataset, 'val')
-    val_data = get_dataset(args.dataset, 'val', val_transform)
+    val_data = get_dataset(args.dataset, 'test+val', val_transform)
     val_loader = torch.utils.data.DataLoader(val_data,
                                              batch_size=args.batch_size,
                                              shuffle=False,
@@ -104,7 +104,7 @@ def main():
         model.eval()
         bit_width_list = list(map(int, args.bit_width_list.split(',')))
         bit_width_list.sort()
-        # extract_classification_data(val_loader, model, criterion, bit_width_list, val_data)
+        extract_classification_data(val_loader, model, criterion, bit_width_list, val_data)
         for width in bit_width_list:
             accs = run_inference(val_loader, model, criterion, width, val_data)
             print(width, accs, sum(accs)/6)
