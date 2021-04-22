@@ -93,11 +93,14 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
     selection_sum_theoretical = 0
 
     start_time = time.time()
+    size_selection_time = 0.0
     for i, (input, target) in enumerate(test_loader):
         with torch.no_grad():
             repeat = True
             while repeat:
+                selection_start_time = time.time()
                 selection = optimization_selector.select_optimization_level(input[0], test_data.get_features(i))
+                size_selection_time += time.time() - selection_start_time
                 selection_sum += selection
                 input = input.cuda()
                 target = target.cuda(non_blocking=True)
@@ -108,23 +111,27 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
                 loss = criterion(output, target)
                 prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
 
-                confidence = prob[0][0]
+                confidence = float(prob[0][0])
+                selection_start_time = time.time()
                 repeat = optimization_selector.results(confidence)
+                size_selection_time += time.time() - selection_start_time
                 if not repeat:
                     selection_sum_theoretical += selection
             conf += float(confidence)
             if top_class[0][0] == target[0]:
                 ca += 1
             n += 1
+    algorithm_time = time.time() - start_time
     print("ca:", ca / n)
     print("Confidence:", conf / n)
     print("average_selection:", selection_sum / n)
     print("average_selection_theoretical:", selection_sum_theoretical / n)
-    print("Time:",  (time.time() - start_time))
+    print("Time:", algorithm_time)
+    print("Selection time [%]:", 100 * size_selection_time / algorithm_time)
 
 
 if __name__ == '__main__':
-    test_optimization_selector(KnnSelector(40))
+    # test_optimization_selector(KnnSelector(40))
 
     # print("Constant 1:")
     # test_optimization_selector(ConstantSelector(1))
@@ -138,7 +145,7 @@ if __name__ == '__main__':
     # test_optimization_selector(ConstantSelector(32))
     # print("Knn:")
     # test_optimization_selector(KnnSelector(20))
-    # print("Confidence hierarchical:")
-    # test_optimization_selector(ConfidenceHierarchicalSelector())
+    print("Confidence hierarchical:")
+    test_optimization_selector(ConfidenceHierarchicalSelector())
     # print("LDA hierarchical:")
     # test_optimization_selector(LDAHierarchicalSelector())

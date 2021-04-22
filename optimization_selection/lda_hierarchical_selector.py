@@ -18,7 +18,7 @@ class LDAHierarchicalSelector(OptimizationSelector):
         self.use_features = use_features
 
     def init(self, optimization_levels):
-        self.optimization_levels = optimization_levels
+        self.optimization_levels = optimization_levels[:3]
 
     def train(self, train_data_loader, train_data, model):
         groups = self.train_subdimention_models(train_data_loader, train_data)

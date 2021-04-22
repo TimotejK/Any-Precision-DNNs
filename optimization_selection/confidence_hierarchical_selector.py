@@ -8,17 +8,54 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
 class ConfidenceHierarchicalSelector(OptimizationSelector):
+
     def __init__(self, n_groups=5):
         self.confidence = []
         self.train_acc = []
         self.n_groups = n_groups
         self.show_statistics = True
-        self.input_is_active = None
+        self.input_is_active = False
         self.selected_width = None
         self.target_acc = 0.9
 
     def init(self, optimization_levels):
-        self.optimization_levels = optimization_levels
+        self.optimization_levels = optimization_levels[:3]
+
+    def train(self, train_data_loader, train_data, model):
+        self.get_confidence_and_ca(train_data_loader, model)
+        groups = self.train_groups(self.confidence)
+        acc_per_group = self.accuracy_per_group(self.train_acc, groups)
+        self.train_hierarchical_model(acc_per_group)
+
+    def select_optimization_level(self, raw_data: list, features: list) -> float:
+        if not self.input_is_active:
+            self.input_is_active = True
+            return self.optimization_levels[0]
+        else:
+            self.input_is_active = False
+            return self.selected_width
+
+    def results(self, confidence: float) -> bool:
+        if not self.input_is_active:
+            return False
+
+        conf_group = self.get_group(confidence)
+        # self.input_is_active = False
+        # return False
+
+
+        selected_width = self.optimization_levels[0]
+        if self.intercepts[int(conf_group)] >= self.target_acc:
+            selected_width = self.optimization_levels[0]
+        else:
+            selected_width = (self.target_acc - self.intercepts[conf_group]) / self.slopes[conf_group]
+
+        self.selected_width = self.closest_available_width(selected_width)
+        if self.selected_width > self.optimization_levels[0]:
+            return True
+        else:
+            self.input_is_active = False
+            return False
 
     def get_confidence_and_ca(self, train_data_loader, model):
         self.confidence = []
@@ -52,37 +89,12 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         self.borders = []
         for i in range(1, self.n_groups + 1):
             self.borders.append(sorted_values[int(i * (len(sorted_values) - 1) / self.n_groups)])
+        self.borders[-1] = 100
+        self.borders = np.array(self.borders)
         groups = []
         for i in range(len(values)):
             groups.append(self.get_group(values[i]))
         return np.array(groups)
-
-    def get_group(self, value):
-        for i in range(self.n_groups):
-            if value <= self.borders[i]:
-                return i
-        return self.n_groups - 1
-
-    def accuracy_per_group(self, test_acc, groups):
-        accuracy = []
-        for g in range(self.n_groups):
-            accuracy.append(np.sum(test_acc[groups == g], axis=0) / test_acc[groups == 0].shape[0])
-        return np.array(accuracy)
-
-    def train_hierarchical_model(self, accuracy_per_group):
-        intercepts = []
-        coefs = []
-        for group in range(self.n_groups):
-            model = LinearRegression()
-            y = accuracy_per_group[group, :]
-            x = np.array(self.optimization_levels).reshape((-1,1))
-            model.fit(x, y)
-            intercepts.append(model.intercept_)
-            coefs.append(model.coef_)
-        self.intercepts = np.array(intercepts)
-        self.slopes = np.array(coefs)
-        if self.show_statistics:
-            self.show_model(accuracy_per_group)
 
     # def train_hierarchical_model_old(self, accuracy_per_group):
     #     training_set = []
@@ -124,6 +136,30 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
     #         self.show_model(training_set)
 
 
+    def get_group(self, value):
+        return np.argmax(self.borders >= value)
+
+    def accuracy_per_group(self, test_acc, groups):
+        accuracy = []
+        for g in range(self.n_groups):
+            accuracy.append(np.sum(test_acc[groups == g], axis=0) / test_acc[groups == 0].shape[0])
+        return np.array(accuracy)
+
+    def train_hierarchical_model(self, accuracy_per_group):
+        intercepts = []
+        coefs = []
+        for group in range(self.n_groups):
+            model = LinearRegression()
+            y = accuracy_per_group[group, :]
+            x = np.array(self.optimization_levels).reshape((-1,1))
+            model.fit(x, y)
+            intercepts.append(model.intercept_)
+            coefs.append(model.coef_)
+        self.intercepts = np.array(intercepts)
+        self.slopes = np.array(coefs)
+        if self.show_statistics:
+            self.show_model(accuracy_per_group)
+
     def show_model(self, accuracy_per_group):
         training_set = []
         for group in range(accuracy_per_group.shape[0]):
@@ -143,40 +179,6 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         plt.xlabel("Bit width")
         plt.ylabel("Classification accuracy")
         plt.show()
-
-    def train(self, train_data_loader, train_data, model):
-        self.get_confidence_and_ca(train_data_loader, model)
-        groups = self.train_groups(self.confidence)
-        acc_per_group = self.accuracy_per_group(self.train_acc, groups)
-        self.train_hierarchical_model(acc_per_group)
-
-    def select_optimization_level(self, raw_data: list, features: list) -> float:
-        if not self.input_is_active:
-            self.input_is_active = True
-            return self.optimization_levels[0]
-        else:
-            self.input_is_active = False
-            return self.selected_width
-
-    def results(self, confidence: float) -> bool:
-        confidence = float(confidence)
-        if not self.input_is_active:
-            return False
-
-        conf_group = self.get_group(confidence)
-
-        selected_width = self.optimization_levels[0]
-        if self.intercepts[int(conf_group)] >= self.target_acc:
-            selected_width = self.optimization_levels[0]
-        else:
-            selected_width = (self.target_acc - self.intercepts[conf_group]) / self.slopes[conf_group]
-
-        self.selected_width = self.closest_available_width(selected_width)
-        if self.selected_width > self.optimization_levels[0]:
-            return True
-        else:
-            self.input_is_active = False
-            return False
 
     def closest_available_width(self, width):
         closest_width = self.optimization_levels[0]
