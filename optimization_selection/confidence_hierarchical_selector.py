@@ -7,6 +7,7 @@ from optimization_selection.optimization_selector import OptimizationSelector
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
+
 class ConfidenceHierarchicalSelector(OptimizationSelector):
 
     def __init__(self, n_groups=5):
@@ -19,10 +20,11 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         self.target_acc = 0.9
 
     def init(self, optimization_levels):
-        self.optimization_levels = optimization_levels[:3]
+        self.optimization_levels = optimization_levels
 
     def train(self, train_data_loader, train_data, model):
         self.get_confidence_and_ca(train_data_loader, model)
+        self.select_viable_sizes()
         groups = self.train_groups(self.confidence)
         acc_per_group = self.accuracy_per_group(self.train_acc, groups)
         self.train_hierarchical_model(acc_per_group)
@@ -43,7 +45,6 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         # self.input_is_active = False
         # return False
 
-
         selected_width = self.optimization_levels[0]
         if self.intercepts[int(conf_group)] >= self.target_acc:
             selected_width = self.optimization_levels[0]
@@ -56,6 +57,15 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         else:
             self.input_is_active = False
             return False
+
+    def select_viable_sizes(self):
+        accuracys = self.train_acc.mean(0)
+        cumulative = np.maximum.accumulate(accuracys)
+        cumulative = np.roll(cumulative, 1)
+        cumulative[0] = 0
+        viable = accuracys > cumulative
+        self.optimization_levels = np.array(self.optimization_levels)[viable]
+        self.train_acc = self.train_acc[:, viable]
 
     def get_confidence_and_ca(self, train_data_loader, model):
         self.confidence = []
@@ -96,46 +106,6 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
             groups.append(self.get_group(values[i]))
         return np.array(groups)
 
-    # def train_hierarchical_model_old(self, accuracy_per_group):
-    #     training_set = []
-    #     for group in range(accuracy_per_group.shape[0]):
-    #         for bit_width in range(accuracy_per_group.shape[1]):
-    #             training_set.append([self.optimization_levels[bit_width], group, accuracy_per_group[group, bit_width]])
-    #     training_set = np.array(training_set)
-    #     with pm.Model() as hierarchical_model:
-    #         mu_a = pm.Normal('mu_alpha', mu=0., sd=1)
-    #         sigma_a = pm.HalfCauchy('sigma_alpha', beta=1)
-    #         mu_b = pm.Normal('mu_beta', mu=0., sd=1)
-    #         sigma_b = pm.HalfCauchy('sigma_beta', beta=1)
-    #
-    #         # Intercept
-    #         a = pm.Normal('alpha', mu=mu_a, sd=sigma_a, shape=self.n_groups)
-    #         # Slope
-    #         b = pm.Normal('beta', mu=mu_b, sd=sigma_b, shape=self.n_groups)
-    #
-    #         # Model error
-    #         eps = pm.HalfCauchy('eps', beta=1)
-    #
-    #         # Expected value
-    #         groups = list(range(self.n_groups))
-    #         accuracy_est = a[training_set.astype(int)[:, 1]] + b[training_set.astype(int)[:, 1]] * training_set[:, 0]
-    #
-    #         # Data likelihood
-    #         y_like = pm.Normal('y_like', mu=accuracy_est, sd=eps, observed=training_set[:, 2])
-    #
-    #     with hierarchical_model:
-    #         step = pm.NUTS()
-    #         trace = pm.sample(100, tune=1000, progressbar=False)
-    #         if self.show_statistics:
-    #             pm.traceplot(trace)
-    #             plt.show()
-    #         self.intercepts = np.mean(trace["alpha"], axis=0)
-    #         self.slopes = np.mean(trace["beta"], axis=0)
-    #
-    #     if self.show_statistics:
-    #         self.show_model(training_set)
-
-
     def get_group(self, value):
         return np.argmax(self.borders >= value)
 
@@ -151,7 +121,7 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         for group in range(self.n_groups):
             model = LinearRegression()
             y = accuracy_per_group[group, :]
-            x = np.array(self.optimization_levels).reshape((-1,1))
+            x = np.array(self.optimization_levels).reshape((-1, 1))
             model.fit(x, y)
             intercepts.append(model.intercept_)
             coefs.append(model.coef_)
