@@ -37,7 +37,7 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
             self.input_is_active = False
             return self.selected_width
 
-    def results(self, confidence: float) -> bool:
+    def results(self, predicition: int, confidence: float) -> bool:
         if not self.input_is_active:
             return False
 

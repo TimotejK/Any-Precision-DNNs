@@ -13,6 +13,7 @@ import models
 from datasets.data import get_dataset, get_transform
 from models.losses import CrossEntropyLossSoft
 from optimization_selection.confidence_hierarchical_selector import ConfidenceHierarchicalSelector
+from optimization_selection.confidence_simple_selector import ConfidenceSimpleSelector
 from optimization_selection.knn_selector import KnnSelector
 from optimization_selection.lda_hierarchical_selector import LDAHierarchicalSelector
 from optimization_selection.optimization_selector import OptimizationSelector
@@ -113,7 +114,7 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
 
                 confidence = float(prob[0][0])
                 selection_start_time = time.time()
-                repeat = optimization_selector.results(confidence)
+                repeat = optimization_selector.results(top_class[0][0], confidence)
                 size_selection_time += time.time() - selection_start_time
                 if not repeat:
                     selection_sum_theoretical += selection
@@ -145,7 +146,9 @@ if __name__ == '__main__':
     # test_optimization_selector(ConstantSelector(32))
     # print("Knn:")
     # test_optimization_selector(KnnSelector(20))
-    print("Confidence hierarchical:")
-    test_optimization_selector(ConfidenceHierarchicalSelector())
+    # print("Confidence hierarchical:")
+    # test_optimization_selector(ConfidenceHierarchicalSelector())
+    print("Simple conficence:")
+    test_optimization_selector(ConfidenceSimpleSelector())
     # print("LDA hierarchical:")
     # test_optimization_selector(LDAHierarchicalSelector())
