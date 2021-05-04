@@ -24,7 +24,7 @@ class ConfidenceSimpleSelector(OptimizationSelector):
         return self.selected_optimization
 
     def results(self, predicition: int, confidence: float) -> bool:
-        activity_index = np.where(self.unique_activities == predicition)[0]
+        activity_index = np.where(self.unique_activities == predicition)[0][0]
         if confidence < self.confidence_thresholds[activity_index]:
             new_selected_index = np.where(self.optimization_levels == self.selected_optimization)[0] + 1
             if new_selected_index >= len(self.optimization_levels):
@@ -79,6 +79,6 @@ class ConfidenceSimpleSelector(OptimizationSelector):
             accuracys = np.mean(self.train_acc[self.activity == activity], 0)
             index = accuracys.argmax()
             mean_confidence = np.mean(self.confidence[self.activity == activity], 0)[index]
-            threshold = mean_confidence - 2 * np.std(self.confidence[self.activity == activity], 0)[index]
+            threshold = mean_confidence - np.std(self.confidence[self.activity == activity], 0)[index]
             self.confidence_thresholds.append(threshold)
         self.confidence_thresholds = np.array(self.confidence_thresholds)
