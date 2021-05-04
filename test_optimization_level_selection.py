@@ -1,4 +1,5 @@
 import argparse
+import copy
 import logging
 import os
 import time
@@ -10,6 +11,7 @@ import torch.optim
 import torch.utils.data
 
 import models
+from datasets.activityRecognitionDataset import ActivityRecognitionDataset
 from datasets.data import get_dataset, get_transform
 from models.losses import CrossEntropyLossSoft
 from optimization_selection.confidence_hierarchical_selector import ConfidenceHierarchicalSelector
@@ -39,21 +41,64 @@ parser.add_argument('--resume', default=None, help='path to latest checkpoint')
 parser.add_argument('--bit_width_list', default='4', help='bit width list')
 args = parser.parse_args()
 
+data_root = os.path.dirname(os.path.realpath(__file__)) + '/data'
 
-def test_optimization_selector(optimization_selector: OptimizationSelector):
+
+def test_optimization_selector_CV(optimization_selector: OptimizationSelector):
+    test_users = [2, 4, 9, 10, 12, 13, 18, 20, 24]
+
+    average_ca = 0
+    average_conf = 0
+    average_selection = 0
+    average_algorithm_percentage = 0
+
+    for i in range(len(test_users)):
+        val_transform = get_transform(args.dataset, 'val')
+        val_data = ActivityRecognitionDataset(root=os.path.join(data_root, 'UCI HAR Dataset'),
+                                              split='test',
+                                              transform=val_transform,
+                                              target_transform=None,
+                                              selected_users=test_users[:i] + test_users[i + 1:])
+        val_data.num_classes = 6
+
+        test_data = ActivityRecognitionDataset(root=os.path.join(data_root, 'UCI HAR Dataset'),
+                                               split='test',
+                                               transform=val_transform,
+                                               target_transform=None,
+                                               selected_users=[test_users[i]])
+        test_data.num_classes = 6
+
+        (ca, conf, selection, selection_theoretical, algorithm_time, algorithm_percentage) = \
+            test_optimization_selector(copy.deepcopy(optimization_selector), val_data, test_data)
+        average_ca += ca
+        average_conf += conf
+        average_selection += selection
+        average_algorithm_percentage += algorithm_percentage
+
+    print("ca:", average_ca / len(test_users))
+    print("Confidence:", average_conf / len(test_users))
+    print("average_selection:", average_selection / len(test_users))
+    print("Selection time [%]:", average_algorithm_percentage / len(test_users))
+
+
+
+def test_optimization_selector(optimization_selector: OptimizationSelector, val_data=None, test_data=None):
     best_gpu = setup_gpus()
     torch.cuda.set_device(best_gpu)
     torch.backends.cudnn.benchmark = True
 
     val_transform = get_transform(args.dataset, 'val')
-    val_data = get_dataset(args.dataset, 'val', val_transform)
+
+    if val_data is None:
+        val_data = get_dataset(args.dataset, 'val', val_transform)
     val_loader = torch.utils.data.DataLoader(val_data,
                                              batch_size=64,
                                              shuffle=False,
                                              num_workers=args.workers,
                                              pin_memory=True)
 
-    test_data = get_dataset(args.dataset, 'test', val_transform)
+    if test_data is None:
+        test_data = get_dataset(args.dataset, 'test', val_transform)
     test_loader = torch.utils.data.DataLoader(test_data,
                                               batch_size=1,
                                               shuffle=False,
@@ -112,9 +157,10 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
                 loss = criterion(output, target)
                 prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
 
+                prediction = int(top_class[0][0])
                 confidence = float(prob[0][0])
                 selection_start_time = time.time()
-                repeat = optimization_selector.results(top_class[0][0], confidence)
+                repeat = optimization_selector.results(prediction, confidence)
                 size_selection_time += time.time() - selection_start_time
                 if not repeat:
                     selection_sum_theoretical += selection
@@ -123,32 +169,37 @@ def test_optimization_selector(optimization_selector: OptimizationSelector):
                 ca += 1
             n += 1
     algorithm_time = time.time() - start_time
-    print("ca:", ca / n)
-    print("Confidence:", conf / n)
-    print("average_selection:", selection_sum / n)
-    print("average_selection_theoretical:", selection_sum_theoretical / n)
-    print("Time:", algorithm_time)
-    print("Selection time [%]:", 100 * size_selection_time / algorithm_time)
+    # print("ca:", ca / n)
+    # print("Confidence:", conf / n)
+    # print("average_selection:", selection_sum / n)
+    # print("average_selection_theoretical:", selection_sum_theoretical / n)
+    # print("Time:", algorithm_time)
+    # print("Selection time [%]:", 100 * size_selection_time / algorithm_time)
+
+    return (ca / n, conf / n, selection_sum / n, selection_sum_theoretical / n, algorithm_time,
+            100 * size_selection_time / algorithm_time)
 
 
 if __name__ == '__main__':
     # test_optimization_selector(KnnSelector(40))
 
     # print("Constant 1:")
-    # test_optimization_selector(ConstantSelector(1))
+    # test_optimization_selector_CV(ConstantSelector(1))
     # print("Constant 2:")
-    # test_optimization_selector(ConstantSelector(2))
+    # test_optimization_selector_CV(ConstantSelector(2))
     # print("Constant 4:")
-    # test_optimization_selector(ConstantSelector(4))
+    # test_optimization_selector_CV(ConstantSelector(4))
     # print("Constant 8:")
-    # test_optimization_selector(ConstantSelector(8))
+    # test_optimization_selector_CV(ConstantSelector(8))
     # print("Constant 32:")
-    # test_optimization_selector(ConstantSelector(32))
+    # test_optimization_selector_CV(ConstantSelector(32))
     # print("Knn:")
-    # test_optimization_selector(KnnSelector(20))
+    # test_optimization_selector_CV(KnnSelector(20))
     # print("Confidence hierarchical:")
-    # test_optimization_selector(ConfidenceHierarchicalSelector())
-    print("Simple conficence:")
-    test_optimization_selector(ConfidenceSimpleSelector())
-    # print("LDA hierarchical:")
-    # test_optimization_selector(LDAHierarchicalSelector())
+    # test_optimization_selector_CV(ConfidenceHierarchicalSelector())
+    # print("Simple conficence:")
+    # test_optimization_selector_CV(ConfidenceSimpleSelector())
+    print("LDA hierarchical:")
+    test_optimization_selector_CV(LDAHierarchicalSelector())
+    print("Knn 40:")
+    test_optimization_selector_CV(KnnSelector(40))

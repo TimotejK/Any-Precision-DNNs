@@ -107,11 +107,12 @@ def reshape_data_xyz_color(rows, labels):
 
 
 class ActivityRecognitionDataset(data.Dataset):
-    def __init__(self, root, split, transform=None, target_transform=None):
+    def __init__(self, root, split, transform=None, target_transform=None, selected_users=None):
         self.root = root
         self.transform = transform
         self.target_transform = target_transform
         self.split = split
+        self.selected_users = selected_users
 
         # now load the picked numpy arrays
         if self.split == 'train' or self.split == 'train_auto_quan' or self.split == 'val_auto_quan':
@@ -137,6 +138,19 @@ class ActivityRecognitionDataset(data.Dataset):
             self.val_data, self.val_labels, self.indexes = reshape_data_xyz_color(self.val_data, self.val_labels)
             self.val_data = self.val_data.transpose((0, 2, 3, 1))  # convert to HWC
             self.val_labels = [int(x) - 1 for x in self.val_labels]
+        elif self.selected_users is not None:
+            self.test_data = self.getAllData("test")
+            self.test_labels = self.getDataLabels("test")
+            self.test_features = self.__getFeatures("test")
+            self.test_users = self.__getUser("test")
+            mask = [user in self.selected_users for user in self.test_users]
+            self.test_data = self.test_data[mask]
+            self.test_labels = self.test_labels[mask]
+            self.test_features = self.test_features[mask]
+            self.test_users = self.test_users[mask]
+            self.test_data, self.test_labels, self.indexes = reshape_data_xyz_color(self.test_data, self.test_labels)
+            self.test_data = self.test_data.transpose((0, 2, 3, 1))  # convert to HWC
+            self.test_labels = [int(x) - 1 for x in self.test_labels]
         else:
             self.test_data = self.getAllData("test")
             self.test_labels = self.getDataLabels("test")
