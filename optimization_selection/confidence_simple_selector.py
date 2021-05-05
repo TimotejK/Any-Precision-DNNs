@@ -13,7 +13,7 @@ class ConfidenceSimpleSelector(OptimizationSelector):
         self.alpha = 0.1
 
     def init(self, optimization_levels: List[int]):
-        self.optimization_levels = optimization_levels
+        self.optimization_levels = np.array(optimization_levels)
         self.selected_optimization = optimization_levels[0]
         self.previous_activity = -1
 
@@ -26,7 +26,7 @@ class ConfidenceSimpleSelector(OptimizationSelector):
     def results(self, predicition: int, confidence: float) -> bool:
         activity_index = np.where(self.unique_activities == predicition)[0][0]
         if confidence < self.confidence_thresholds[activity_index]:
-            new_selected_index = np.where(self.optimization_levels == self.selected_optimization)[0] + 1
+            new_selected_index = np.where(self.optimization_levels == self.selected_optimization)[0][0] + 1
             if new_selected_index >= len(self.optimization_levels):
                 return False
             self.selected_optimization = self.optimization_levels[new_selected_index]

@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
-class LDAHierarchicalSelector(OptimizationSelector):
+class LDAAccuracySelector(OptimizationSelector):
     def __init__(self, n_groups=3, use_features=True):
         self.confidence = []
         self.train_acc = []
@@ -21,8 +21,8 @@ class LDAHierarchicalSelector(OptimizationSelector):
         self.optimization_levels = optimization_levels[:3]
 
     def train(self, train_data_loader, train_data, model):
-        groups = self.train_subdimention_models(train_data_loader, train_data)
         self.get_confidence_and_ca(train_data_loader, model)
+        groups = self.train_subdimention_models(train_data_loader, train_data)
         acc_per_group = self.accuracy_per_group(self.train_acc, groups)
         self.train_hierarchical_model(acc_per_group)
 
@@ -51,20 +51,24 @@ class LDAHierarchicalSelector(OptimizationSelector):
         return self.get_group(X_test.reshape(-1))
 
     def train_subdimention_models(self, train_loader, train_data):
+        sample_accuracy = np.mean(self.train_acc, 1)
+        median_acc = np.median(sample_accuracy)
         X_train = []
         y_train = []
         class_train = []
         for batch_idx, (input, target) in enumerate(train_loader):
             for ind, (i, t) in enumerate(zip(input, target)):
+                sample_index = batch_idx * train_loader.batch_size + ind
                 if self.use_features:
-                    X_train.append(train_data.get_features(batch_idx * train_loader.batch_size + ind))
+                    X_train.append(train_data.get_features(sample_index))
                 else:
                     X_train.append(i.reshape(-1).tolist())
                 class_train.append(int(t))
-                if int(t) < 3:
-                    y_train.append(1)
-                else:
+                accuracy = float(sample_accuracy[sample_index])
+                if accuracy < median_acc:
                     y_train.append(0)
+                else:
+                    y_train.append(1)
 
         self.standardScaler = StandardScaler()
         X_train = self.standardScaler.fit_transform(X_train)

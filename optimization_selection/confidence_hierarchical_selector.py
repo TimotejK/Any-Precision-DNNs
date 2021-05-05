@@ -14,7 +14,7 @@ class ConfidenceHierarchicalSelector(OptimizationSelector):
         self.confidence = []
         self.train_acc = []
         self.n_groups = n_groups
-        self.show_statistics = True
+        self.show_statistics = False
         self.input_is_active = False
         self.selected_width = None
         self.target_acc = 0.9
