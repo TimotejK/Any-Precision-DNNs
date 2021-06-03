@@ -17,8 +17,8 @@ import models
 from models.losses import CrossEntropyLossSoft
 from datasets.data import get_dataset, get_transform
 from optimizer import get_optimizer_config, get_lr_scheduler
-from utils import setup_logging, save_checkpoint
-from utils import AverageMeter, accuracy
+from utils.utils import setup_logging, save_checkpoint
+from utils.utils import AverageMeter, accuracy
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--results-dir', default='./results', help='results dir')

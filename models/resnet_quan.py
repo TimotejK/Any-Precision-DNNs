@@ -2,7 +2,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from utils.conv_settings import ConvSettings, get_conv_settings
+from utils.quant_modules import QuantBnConv2d, QuantAct, QuantConv2d
 from .quan_ops import conv2d_quantize_fn, activation_quantize_fn, batchnorm_fn
+from pytorchcv.model_provider import get_model as ptcv_get_model
 
 __all__ = ['resnet20q', 'resnet50q']
 
@@ -116,21 +120,29 @@ class PreActBottleneckQ(nn.Module):
         norm_layer = batchnorm_fn(self.bit_list)
 
         self.bn0 = norm_layer(in_planes)
-        self.act0 = Activate(self.bit_list)
-        self.conv0 = Conv2d(in_planes, out_planes, kernel_size=1, stride=1, bias=False)
+        # self.act0 = Activate(self.bit_list)
+        self.Qact0 = QuantAct()
+        # self.conv0 = Conv2d(in_planes, out_planes, kernel_size=1, stride=1, bias=False)
+        self.Qconv0 = QuantConv2d(in_planes, out_planes, kernel_size=1, stride=1, bias=False)
         self.bn1 = norm_layer(out_planes)
-        self.act1 = Activate(self.bit_list)
-        self.conv1 = Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        # self.act1 = Activate(self.bit_list)
+        self.Qact1 = QuantAct()
+        # self.conv1 = Conv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.Qconv1 = QuantConv2d(out_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn2 = norm_layer(out_planes)
-        self.act2 = Activate(self.bit_list)
-        self.conv2 = Conv2d(out_planes, out_planes * self.expansion, kernel_size=1, stride=1, bias=False)
+        # self.act2 = Activate(self.bit_list)
+        self.Qact2 = QuantAct()
+        # self.conv2 = Conv2d(out_planes, out_planes * self.expansion, kernel_size=1, stride=1, bias=False)
+        self.Qconv2 = QuantConv2d(out_planes, out_planes * self.expansion, kernel_size=1, stride=1, bias=False)
         self.downsample = downsample
 
-    def forward(self, x):        
+    def forward(self, x):
         shortcut = self.downsample(x) if self.downsample is not None else x
-        out = self.conv0(self.act0(self.bn0(x)))
-        out = self.conv1(self.act1(self.bn1(out)))
-        out = self.conv2(self.act2(self.bn2(out)))
+
+        out = self.Qconv0(self.Qact0(self.bn0(x)))[0]
+        out = self.Qconv1(self.Qact1(self.bn1(out)))[0]
+        out = self.Qconv2(self.Qact2(self.bn2(out)))[0]
+
         out += shortcut
         return out
 

@@ -23,7 +23,7 @@ from optimization_selection.lda_hierarchical_selector2 import LDAAccuracySelecto
 from optimization_selection.optimization_selector import OptimizationSelector
 from optimization_selection.random_selector import RandomSelector
 from optimization_selection.trivial_selector import ConstantSelector
-from utils import setup_gpus
+from utils.utils import setup_gpus
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--results-dir', default='./results', help='results dir')
@@ -62,7 +62,10 @@ def test_optimization_selector_CV(optimization_selector: OptimizationSelector):
     average_conf = 0
     average_selection = 0
     average_algorithm_percentage = 0
+    average_algorithm_time = 0
+    n = 0
 
+    # FIXME set range to len(test_users)
     for i in range(len(test_users)):
         val_transform = get_transform(args.dataset, 'val')
         val_data = ActivityRecognitionDataset(root=os.path.join(data_root, 'UCI HAR Dataset'),
@@ -85,11 +88,14 @@ def test_optimization_selector_CV(optimization_selector: OptimizationSelector):
         average_conf += conf
         average_selection += selection
         average_algorithm_percentage += algorithm_percentage
+        average_algorithm_time += algorithm_time
+        n += 1
 
-    print("ca:", average_ca / len(test_users))
-    print("Confidence:", average_conf / len(test_users))
-    print("average_selection:", average_selection / len(test_users))
-    print("Selection time [%]:", average_algorithm_percentage / len(test_users))
+    print("ca:", average_ca / n)
+    print("Confidence:", average_conf / n)
+    print("average_selection:", average_selection / n)
+    print("Algorithm time s:", average_algorithm_time / n)
+    print("Selection time [%]:", average_algorithm_percentage / n)
 
 
 def test_optimization_selector(optimization_selector: OptimizationSelector, val_data=None, test_data=None):
@@ -193,14 +199,14 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 if __name__ == '__main__':
     # print("Constant 1:")
     # test_optimization_selector_CV(ConstantSelector(1))
-    # print("Constant 2:")
-    # test_optimization_selector_CV(ConstantSelector(2))
-    # print("Constant 4:")
-    # test_optimization_selector_CV(ConstantSelector(4))
-    # print("Constant 8:")
-    # test_optimization_selector_CV(ConstantSelector(8))
-    # print("Constant 32:")
-    # test_optimization_selector_CV(ConstantSelector(32))
+    print("Constant 2:")
+    test_optimization_selector_CV(ConstantSelector(2))
+    print("Constant 4:")
+    test_optimization_selector_CV(ConstantSelector(4))
+    print("Constant 8:")
+    test_optimization_selector_CV(ConstantSelector(8))
+    print("Constant 32:")
+    test_optimization_selector_CV(ConstantSelector(32))
     # print("Random:")
     # test_optimization_selector_CV(RandomSelector())
     # print("Random 1-4:")
@@ -217,10 +223,10 @@ if __name__ == '__main__':
     # test_optimization_selector_CV(LDAAccuracySelector(use_features=True))
     # print("Simple conficence:")
     # test_optimization_selector_CV(ConfidenceSimpleSelector())
-    print("LDA hierarchical features:")
-    test_optimization_selector_CV(LDAHierarchicalSelector(use_features=True, n_groups=5))
+    # print("LDA hierarchical features:")
+    # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=True, n_groups=5))
     # print("LDA hierarchical raw signal:")
     # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=False))
-    print("Best feature subspace:")
-    test_optimization_selector_CV(CorelatedFeaturesSelector(n_groups=10))
+    # print("Best feature subspace:")
+    # test_optimization_selector_CV(CorelatedFeaturesSelector(n_groups=10))
     pass
