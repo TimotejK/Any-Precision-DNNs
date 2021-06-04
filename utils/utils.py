@@ -2,7 +2,8 @@ import os
 import torch
 import logging
 import shutil
-import gpustat
+if os.environ['CPU'] != 'True':
+    import gpustat
 import random
 
 
