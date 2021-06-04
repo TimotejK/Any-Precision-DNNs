@@ -126,7 +126,7 @@ class PreActBottleneckQ(nn.Module):
         self.conv2 = Conv2d(out_planes, out_planes * self.expansion, kernel_size=1, stride=1, bias=False)
         self.downsample = downsample
 
-    def forward(self, x):        
+    def forward(self, x):
         shortcut = self.downsample(x) if self.downsample is not None else x
         out = self.conv0(self.act0(self.bn0(x)))
         out = self.conv1(self.act1(self.bn1(out)))

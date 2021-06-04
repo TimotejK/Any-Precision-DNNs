@@ -23,7 +23,8 @@ from optimization_selection.lda_hierarchical_selector2 import LDAAccuracySelecto
 from optimization_selection.optimization_selector import OptimizationSelector
 from optimization_selection.random_selector import RandomSelector
 from optimization_selection.trivial_selector import ConstantSelector
-from utils import setup_gpus
+if os.environ['CPU'] != 'True':
+    from utils import setup_gpus
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--results-dir', default='./results', help='results dir')
@@ -62,6 +63,8 @@ def test_optimization_selector_CV(optimization_selector: OptimizationSelector):
     average_conf = 0
     average_selection = 0
     average_algorithm_percentage = 0
+    average_algorithm_time = 0
+    n = 0
 
     for i in range(len(test_users)):
         val_transform = get_transform(args.dataset, 'val')
@@ -85,16 +88,20 @@ def test_optimization_selector_CV(optimization_selector: OptimizationSelector):
         average_conf += conf
         average_selection += selection
         average_algorithm_percentage += algorithm_percentage
+        average_algorithm_time += algorithm_time
+        n += 1
 
-    print("ca:", average_ca / len(test_users))
-    print("Confidence:", average_conf / len(test_users))
-    print("average_selection:", average_selection / len(test_users))
-    print("Selection time [%]:", average_algorithm_percentage / len(test_users))
+    print("ca:", average_ca / n)
+    print("Confidence:", average_conf / n)
+    print("average_selection:", average_selection / n)
+    print("Algorithm time s:", average_algorithm_time / n)
+    print("Selection time [%]:", average_algorithm_percentage / n)
 
 
 def test_optimization_selector(optimization_selector: OptimizationSelector, val_data=None, test_data=None):
-    best_gpu = setup_gpus()
-    torch.cuda.set_device(best_gpu)
+    if os.environ['CPU'] != 'True':
+        best_gpu = setup_gpus()
+        torch.cuda.set_device(best_gpu)
     torch.backends.cudnn.benchmark = True
 
     val_transform = get_transform(args.dataset, 'val')
@@ -117,13 +124,19 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 
     bit_width_list = list(map(int, args.bit_width_list.split(',')))
     bit_width_list.sort()
-    model = models.__dict__[args.model](bit_width_list, val_data.num_classes).cuda()
+    if os.environ['CPU'] != 'True':
+        model = models.__dict__[args.model](bit_width_list, val_data.num_classes)
+    else:
+        model = models.__dict__[args.model](bit_width_list, val_data.num_classes).cuda()
 
     if args.pretrain and args.pretrain != 'None':
         if os.path.isdir(args.pretrain):
             args.pretrain = os.path.join(args.pretrain, 'model_best.pth.tar')
         if os.path.isfile(args.pretrain):
-            checkpoint = torch.load(args.pretrain, map_location='cuda:{}'.format(best_gpu))
+            if os.environ['CPU'] != 'True':
+                checkpoint = torch.load(args.pretrain, map_location=torch.device('cpu'))
+            else:
+                checkpoint = torch.load(args.pretrain, map_location='cuda:{}'.format(best_gpu))
             model.load_state_dict(checkpoint['state_dict'], strict=False)
             logging.info("loaded pretrain checkpoint '%s' (epoch %s)", args.pretrain, checkpoint['epoch'])
         else:
@@ -134,8 +147,12 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
     num_parameters = sum([l.nelement() for l in model.parameters()])
     logging.info("number of parameters: %d", num_parameters)
 
-    criterion = nn.CrossEntropyLoss().cuda()
-    criterion_soft = CrossEntropyLossSoft().cuda()
+    if os.environ['CPU'] != 'True':
+        criterion = nn.CrossEntropyLoss().cuda()
+        criterion_soft = CrossEntropyLossSoft().cuda()
+    else:
+        criterion = nn.CrossEntropyLoss()
+        criterion_soft = CrossEntropyLossSoft()
 
     model.eval()
 
@@ -157,9 +174,10 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
                 selection_start_time = time.time()
                 selection = optimization_selector.select_optimization_level(input[0], test_data.get_features(i))
                 size_selection_time += time.time() - selection_start_time
-                selection_sum += selection_cost[selection]
-                input = input.cuda()
-                target = target.cuda(non_blocking=True)
+                selection_sum += selection
+                if os.environ['CPU'] != 'True':
+                    input = input.cuda()
+                    target = target.cuda(non_blocking=True)
 
                 model.apply(lambda m: setattr(m, 'wbit', selection))
                 model.apply(lambda m: setattr(m, 'abit', selection))
@@ -191,16 +209,16 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 
 
 if __name__ == '__main__':
-    # print("Constant 1:")
-    # test_optimization_selector_CV(ConstantSelector(1))
-    # print("Constant 2:")
-    # test_optimization_selector_CV(ConstantSelector(2))
-    # print("Constant 4:")
-    # test_optimization_selector_CV(ConstantSelector(4))
-    # print("Constant 8:")
-    # test_optimization_selector_CV(ConstantSelector(8))
-    # print("Constant 32:")
-    # test_optimization_selector_CV(ConstantSelector(32))
+    print("Constant 1:")
+    test_optimization_selector_CV(ConstantSelector(1))
+    print("Constant 2:")
+    test_optimization_selector_CV(ConstantSelector(2))
+    print("Constant 4:")
+    test_optimization_selector_CV(ConstantSelector(4))
+    print("Constant 8:")
+    test_optimization_selector_CV(ConstantSelector(8))
+    print("Constant 32:")
+    test_optimization_selector_CV(ConstantSelector(32))
     # print("Random:")
     # test_optimization_selector_CV(RandomSelector())
     # print("Random 1-4:")
@@ -217,10 +235,10 @@ if __name__ == '__main__':
     # test_optimization_selector_CV(LDAAccuracySelector(use_features=True))
     # print("Simple conficence:")
     # test_optimization_selector_CV(ConfidenceSimpleSelector())
-    print("LDA hierarchical features:")
-    test_optimization_selector_CV(LDAHierarchicalSelector(use_features=True, n_groups=5))
+    # print("LDA hierarchical features:")
+    # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=True, n_groups=5))
     # print("LDA hierarchical raw signal:")
     # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=False))
-    print("Best feature subspace:")
-    test_optimization_selector_CV(CorelatedFeaturesSelector(n_groups=10))
+    # print("Best feature subspace:")
+    # test_optimization_selector_CV(CorelatedFeaturesSelector(n_groups=10))
     pass
