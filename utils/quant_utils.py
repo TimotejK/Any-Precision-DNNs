@@ -1,4 +1,5 @@
 import math
+import os
 import numpy as np
 import torch
 import time
@@ -209,8 +210,12 @@ def batch_frexp(inputs):
 
     output_e = 31. - output_e
 
-    return torch.from_numpy(output_m).cuda().view(shape_of_input), \
-           torch.from_numpy(output_e).cuda().view(shape_of_input)
+    if os.environ['CPU'] != 'True':
+        return torch.from_numpy(output_m).cuda().view(shape_of_input), \
+               torch.from_numpy(output_e).cuda().view(shape_of_input)
+    else:
+        return torch.from_numpy(output_m).view(shape_of_input), \
+               torch.from_numpy(output_e).view(shape_of_input)
 
 
 class ste_round(Function):
@@ -248,7 +253,10 @@ class SymmetricQuantFunction(Function):
         else:
             raise ValueError("The SymmetricQuantFunction requires a pre-calculated scaling factor")
 
-        zero_point = torch.tensor(0.).cuda()
+        if os.environ['CPU'] != 'True':
+            zero_point = torch.tensor(0.).cuda()
+        else:
+            zero_point = torch.tensor(0.)
 
         new_quant_x = linear_quantize(x, scale, zero_point, inplace=False)
 
@@ -296,7 +304,10 @@ class AsymmetricQuantFunction(Function):
         if specified_zero_point is not None:
             zero_point = specified_zero_point
         else:
-            zero_point = torch.tensor(0).cuda()
+            if os.environ['CPU'] != 'True':
+                zero_point = torch.tensor(0).cuda()
+            else:
+                zero_point = torch.tensor(0)
 
         new_quant_x = linear_quantize(x, scale, zero_point, inplace=False)
         n = 2 ** k - 1

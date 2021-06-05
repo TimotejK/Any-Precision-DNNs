@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 from torch.nn import Module, Parameter
 from .quant_utils import *
-
+from torch.nn.quantized import functional as qF
 
 class QuantLinear(Module):
     """
@@ -212,6 +212,7 @@ class QuantAct(Module):
         (1) identity branch directly connect to the input featuremap
         (2) identity branch contains convolutional layers that operate on the input featuremap
         """
+        # self.full_precision_flag = self.abit == 32
         if type(x) is tuple:
             if len(x) == 3:
                 channel_num = x[2]
@@ -642,6 +643,9 @@ class QuantConv2d(nn.Conv2d):
         self.bias_bit = bias_bit
         self.quantize_bias = (False if bias_bit is None else True)
 
+        self.register_buffer('conv_scaling_factor', torch.zeros(self.out_channels))
+        self.register_buffer('weight_integer', torch.zeros_like(self.weight, dtype=torch.int8))
+
     def __repr__(self):
         s = super(QuantConv2d, self).__repr__()
         s = "(" + s + " weight_bit={}, full_precision_flag={}, quant_mode={})".format(self.wbit,
@@ -714,7 +718,12 @@ class QuantConv2d(nn.Conv2d):
         if self.quant_mode == 'symmetric':
             self.conv_scaling_factor = symmetric_linear_quantization_params(self.wbit, w_min, w_max,
                                                                             self.per_channel)
-            self.weight_integer = self.weight_function(self.weight, self.wbit, self.conv_scaling_factor)
+
+            if self.true_quantization and self.wbit <= 8:
+                self.weight_integer = torch.quantize_per_tensor(self.weight, self.conv_scaling_factor, 0, torch.qint8)
+            else:
+                self.weight_integer = self.weight_function(self.weight, self.wbit, self.conv_scaling_factor)
+
             bias_scaling_factor = self.conv_scaling_factor.view(1, -1) * pre_act_scaling_factor.view(1, -1)
             if self.quantize_bias and (self.bias is not None):
                 self.bias_integer = self.weight_function(self.bias, self.bias_bit, bias_scaling_factor)
@@ -723,17 +732,18 @@ class QuantConv2d(nn.Conv2d):
         else:
             raise Exception('For weight, we only support symmetric quantization.')
 
-        pre_act_scaling_factor = pre_act_scaling_factor.view(1, -1, 1, 1)
-        x_int = x / pre_act_scaling_factor
+        # pre_act_scaling_factor = pre_act_scaling_factor.view(1, -1, 1, 1)
+        if self.true_quantization and self.wbit <= 8:
+            x_int = torch.quantize_per_tensor(x, pre_act_scaling_factor[0], 2 ** (self.abit - 1) - 1, torch.quint8)
+        else:
+            x_int = (x / pre_act_scaling_factor)
         correct_output_scale = bias_scaling_factor.view(1, -1, 1, 1)
 
-        if self.bias is None:
-            return (F.conv2d(x_int, self.weight_integer, None,
-                             self.stride, self.padding, self.dilation, self.groups)
-                    * correct_output_scale, self.conv_scaling_factor)
+        if self.true_quantization and self.wbit <= 8:
+            return (qF.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding, self.dilation, self.groups, scale=pre_act_scaling_factor[0], zero_point=2 ** (self.abit - 1) - 1).dequantize(), self.conv_scaling_factor)
         else:
             return (F.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding,
-                             self.dilation, self.groups) * correct_output_scale, self.conv_scaling_factor)
+                              self.dilation, self.groups) * correct_output_scale, self.conv_scaling_factor)
 
 
 def freeze_model(model):
