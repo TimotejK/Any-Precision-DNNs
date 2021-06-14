@@ -284,7 +284,7 @@ class QuantAct(Module):
             else:
                 if identity is None:
                     if pre_weight_scaling_factor is None:
-                        pre_weight_scaling_factor = self.pre_weight_scaling_factor
+                        pre_weight_scaling_factor = self.pre_weight_scaling_factor # FIXME tukaj je problem!!!
                     quant_act_int = fixedpoint_fn.apply(x, self.abit, self.quant_mode,
                                                         self.act_scaling_factor, 0, pre_act_scaling_factor,
                                                         pre_weight_scaling_factor)
@@ -426,7 +426,7 @@ class QuantBnConv2d(Module):
 
             # update mean and variance in running stats
             self.bn.running_mean = self.bn.running_mean.detach() * self.bn.momentum + (
-                        1 - self.bn.momentum) * batch_mean
+                    1 - self.bn.momentum) * batch_mean
             self.bn.running_var = self.bn.running_var.detach() * self.bn.momentum + (1 - self.bn.momentum) * batch_var
 
             output_factor = self.bn.weight.view(1, -1, 1, 1) / torch.sqrt(batch_var + self.bn.eps).view(1, -1, 1, 1)
@@ -628,13 +628,15 @@ class QuantConv2d(nn.Conv2d):
                  stride,
                  bias,
                  padding=0,
+                 groups=1,
                  bias_bit=None,
                  full_precision_flag=False,
                  quant_mode="symmetric",
                  per_channel=False,
                  fix_flag=False,
                  weight_percentile=0):
-        super(QuantConv2d, self).__init__(in_channels, out_channels, kernel_size, stride=stride, bias=bias, padding=padding)
+        super(QuantConv2d, self).__init__(in_channels, out_channels, kernel_size, stride=stride, bias=bias,
+                                          padding=padding)
         self.full_precision_flag = full_precision_flag
         self.quant_mode = quant_mode
         self.per_channel = per_channel
@@ -642,9 +644,8 @@ class QuantConv2d(nn.Conv2d):
         self.weight_percentile = weight_percentile
         self.bias_bit = bias_bit
         self.quantize_bias = (False if bias_bit is None else True)
+        self.groups = groups
 
-        self.register_buffer('conv_scaling_factor', torch.zeros(self.out_channels))
-        self.register_buffer('weight_integer', torch.zeros_like(self.weight, dtype=torch.int8))
 
     def __repr__(self):
         s = super(QuantConv2d, self).__repr__()
@@ -689,6 +690,10 @@ class QuantConv2d(nn.Conv2d):
             raise ValueError("unknown quant mode: {}".format(self.quant_mode))
 
         w = self.weight
+
+        # if self.wbit == 32:
+        #     return (F.conv2d(x, w, self.bias, self.stride, self.padding,
+        #                      self.dilation, self.groups), self.conv_scaling_factor)
 
         # calculate quantization range
         if self.per_channel:
@@ -740,10 +745,12 @@ class QuantConv2d(nn.Conv2d):
         correct_output_scale = bias_scaling_factor.view(1, -1, 1, 1)
 
         if self.true_quantization and self.wbit <= 8:
-            return (qF.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding, self.dilation, self.groups, scale=pre_act_scaling_factor[0], zero_point=2 ** (self.abit - 1) - 1).dequantize(), self.conv_scaling_factor)
+            return (qF.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding, self.dilation,
+                              self.groups, scale=pre_act_scaling_factor[0],
+                              zero_point=2 ** (self.abit - 1) - 1).dequantize(), self.conv_scaling_factor)
         else:
             return (F.conv2d(x_int, self.weight_integer, self.bias_integer, self.stride, self.padding,
-                              self.dilation, self.groups) * correct_output_scale, self.conv_scaling_factor)
+                             self.dilation, self.groups) * correct_output_scale, self.conv_scaling_factor)
 
 
 def freeze_model(model):

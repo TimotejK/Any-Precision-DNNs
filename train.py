@@ -68,6 +68,7 @@ def main():
     bit_width_list = list(map(int, args.bit_width_list.split(',')))
     bit_width_list.sort()
     model = models.__dict__[args.model](bit_width_list, train_data.num_classes).cuda()
+    model.apply(lambda m: setattr(m, 'true_quantization', False))
 
     lr_decay = list(map(int, args.lr_decay.split(',')))
     optimizer = get_optimizer_config(model, args.optimizer, args.lr, args.weight_decay)
