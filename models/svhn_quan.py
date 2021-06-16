@@ -16,7 +16,7 @@ class Activate(nn.Module):
         super(Activate, self).__init__()
         self.bit_list = bit_list
         self.abit = self.bit_list[-1]
-        self.acti = nn.ReLU(inplace=True)
+        self.acti = nn.ReLU(inplace=False)
         self.quantize = quantize
         if self.quantize:
             self.quan = activation_quantize_fn(bit_list=self.bit_list)

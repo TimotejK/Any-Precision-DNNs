@@ -125,18 +125,18 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
     bit_width_list = list(map(int, args.bit_width_list.split(',')))
     bit_width_list.sort()
     if os.environ['CPU'] != 'True':
-        model = models.__dict__[args.model](bit_width_list, val_data.num_classes)
-    else:
         model = models.__dict__[args.model](bit_width_list, val_data.num_classes).cuda()
+    else:
+        model = models.__dict__[args.model](bit_width_list, val_data.num_classes)
 
     if args.pretrain and args.pretrain != 'None':
         if os.path.isdir(args.pretrain):
             args.pretrain = os.path.join(args.pretrain, 'model_best.pth.tar')
         if os.path.isfile(args.pretrain):
             if os.environ['CPU'] != 'True':
-                checkpoint = torch.load(args.pretrain, map_location=torch.device('cpu'))
-            else:
                 checkpoint = torch.load(args.pretrain, map_location='cuda:{}'.format(best_gpu))
+            else:
+                checkpoint = torch.load(args.pretrain, map_location=torch.device('cpu'))
             model.load_state_dict(checkpoint['state_dict'], strict=False)
             logging.info("loaded pretrain checkpoint '%s' (epoch %s)", args.pretrain, checkpoint['epoch'])
         else:

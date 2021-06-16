@@ -1,9 +1,11 @@
 import torch
 import torch.nn as nn
-from utils.quant_modules import QuantBnConv2d, QuantAct, QuantConv2d, QuantAveragePool2d
 from .quan_ops import conv2d_quantize_fn, activation_quantize_fn, batchnorm_fn
 
 __all__ = ['mobileNetV2']
+
+from .resnet_quan import Activate
+
 
 class LinearBottleneckQ(nn.Module):
     expansion = 4
@@ -21,55 +23,55 @@ class LinearBottleneckQ(nn.Module):
 
         norm_layer = batchnorm_fn(self.bit_list)
 
-        self.quant_act = QuantAct()
+        self.quant_act = Activate(self.bit_list)
+        Conv2d = conv2d_quantize_fn(self.bit_list)
 
         if self.use_exp_conv:
             self.bn1 = norm_layer(in_planes)
-            self.conv1 = QuantConv2d(in_planes, in_planes, kernel_size=1, stride=1, bias=False, padding=0, groups=1)
-            self.quant_act1 = QuantAct()
+            self.conv1 = Conv2d(in_planes, in_planes, kernel_size=1, stride=1, bias=False, padding=0, groups=1)
+            self.quant_act1 = Activate(self.bit_list)
 
         self.bn2 = norm_layer(in_planes)
-        self.conv2 = QuantConv2d(1, in_planes, kernel_size=3, stride=1, bias=False, padding=1, groups=in_planes)
-        self.quant_act2 = QuantAct()
+        self.conv2 = Conv2d(in_planes, in_planes, kernel_size=3, stride=1, bias=False, padding=1, groups=in_planes)
+        self.quant_act2 = Activate(self.bit_list)
 
         self.bn3 = norm_layer(in_planes)
-        self.conv3 = QuantConv2d(in_planes, out_planes, kernel_size=1, stride=1, bias=False, padding=0, groups=1)
+        self.conv3 = Conv2d(in_planes, out_planes, kernel_size=1, stride=1, bias=False, padding=0, groups=1)
 
-        self.quant_act_int32 = QuantAct()
+        self.quant_act_int32 = Activate(self.bit_list)
 
-    def forward(self, x, scaling_factor_int32=None):
+    def forward(self, x):
         if self.residual:
             identity = x
 
-        x, act_scaling_factor = self.quant_act(x, scaling_factor_int32, None, None, None, None)
+        x = self.quant_act(x)
 
         if self.use_exp_conv:
-            x, weight_scaling_factor = self.conv1(self.bn1(x), act_scaling_factor)
+            x = self.conv1(self.bn1(x))
             x = self.activatition_func(x)
-            x, self.act_scaling_factor = self.quant_act1(x, act_scaling_factor, weight_scaling_factor, None, None)
+            x = self.quant_act1(x)
 
-            x, weight_scaling_factor = self.conv2(self.bn2(x), act_scaling_factor)
+            x = self.conv2(self.bn2(x))
             x = self.activatition_func(x)
-            x, act_scaling_factor = self.quant_act2(x, act_scaling_factor, weight_scaling_factor, None, None)
+            x = self.quant_act2(x)
 
             # note that, there is no activation for the last conv
-            x, weight_scaling_factor = self.conv3(self.bn3(x), act_scaling_factor)
+            x = self.conv3(self.bn3(x))
         else:
-            x, weight_scaling_factor = self.conv2(self.bn2(x), act_scaling_factor)
+            x = self.conv2(self.bn2(x))
             x = self.activatition_func(x)
-            x, act_scaling_factor = self.quant_act2(x, act_scaling_factor, weight_scaling_factor, None, None)
+            x = self.quant_act2(x)
 
             # note that, there is no activation for the last conv
-            x, weight_scaling_factor = self.conv3(self.bn3(x), act_scaling_factor)
+            x = self.conv3(self.bn3(x))
 
         if self.residual:
             x = x + identity
-            x, act_scaling_factor = self.quant_act_int32(x, act_scaling_factor, weight_scaling_factor, identity,
-                                                         scaling_factor_int32, None)
+            x = self.quant_act_int32(x)
         else:
-            x, act_scaling_factor = self.quant_act_int32(x, act_scaling_factor, weight_scaling_factor, None, None, None)
+            x = self.quant_act_int32(x)
 
-        return x, act_scaling_factor
+        return x
 
 
 class Q_MobileNetV2(nn.Module):
@@ -102,20 +104,25 @@ class Q_MobileNetV2(nn.Module):
                  in_size=(224, 224),
                  num_classes=1000):
         super(Q_MobileNetV2, self).__init__()
+        self.bit_list = bit_list
         self.in_size = in_size
         self.num_classes = num_classes
         self.channels = channels
         self.activatition_func = nn.ReLU6()
 
         # add input quantization
-        self.quant_input = QuantAct()
+        self.quant_input = Activate(self.bit_list)
+        Conv2d = conv2d_quantize_fn(self.bit_list)
+        norm_layer = batchnorm_fn(self.bit_list)
+
 
         # change the inital block
-        self.add_module("init_block", QuantConv2d(in_channels=in_channels, out_channels=init_block_channels, kernel_size=3, stride=2, padding=1, groups=1, bias=False))
+        self.add_module("init_bn", norm_layer(in_channels))
+        self.add_module("init_block", Conv2d(in_channels=in_channels, out_channels=init_block_channels, kernel_size=3, stride=2, padding=1, groups=1, bias=False))
 
         # self.init_block.set_param(model.features.init_block.conv, model.features.init_block.bn)
 
-        self.quant_act_int32 = QuantAct()
+        self.quant_act_int32 = Activate(self.bit_list)
 
         self.features = nn.Sequential()
         # change the middle blocks
@@ -139,26 +146,27 @@ class Q_MobileNetV2(nn.Module):
             self.features.add_module("stage{}".format(i + 1), stage)
 
         # change the final block
-        self.quant_act_before_final_block = QuantAct()
-        self.features.add_module("final_block", QuantConv2d(in_channels=320, out_channels=1280, kernel_size=1, stride=1, bias=False))
+        self.quant_act_before_final_block = Activate(self.bit_list)
+        self.features.add_module("final_bn", norm_layer(320))
+        self.features.add_module("final_block", Conv2d(in_channels=320, out_channels=1280, kernel_size=1, stride=1, bias=False))
 
-        self.quant_act_int32_final = QuantAct()
+        self.quant_act_int32_final = Activate(self.bit_list)
 
         in_channels = final_block_channels
 
-        self.features.add_module("final_pool", QuantAveragePool2d())
-        self.quant_act_output = QuantAct()
+        self.features.add_module("final_pool", nn.AvgPool2d(kernel_size=7, stride=1, padding=0))
+        self.quant_act_output = Activate(self.bit_list)
 
-        self.output = QuantConv2d(in_channels=in_channels, out_channels=num_classes, kernel_size=1, stride=1, bias=False, padding=0, groups=1)
+        self.output = Conv2d(in_channels=in_channels, out_channels=num_classes, kernel_size=1, stride=1, bias=False, padding=0, groups=1)
 
     def forward(self, x):
         # quantize input
-        x, act_scaling_factor = self.quant_input(x)
+        x = self.quant_input(x)
 
         # the init block
-        x, weight_scaling_factor = self.init_block(x, act_scaling_factor)
+        x = self.init_block(self.init_bn(x))
         x = self.activatition_func(x)
-        x, act_scaling_factor = self.quant_act_int32(x, act_scaling_factor, weight_scaling_factor, None, None)
+        x = self.quant_act_int32(x)
 
         # the feature block
         for i, channels_per_stage in enumerate(self.channels):
@@ -166,18 +174,18 @@ class Q_MobileNetV2(nn.Module):
             for j, out_channels in enumerate(channels_per_stage):
                 cur_unit = getattr(cur_stage, f'unit{j+1}')
 
-                x, act_scaling_factor = cur_unit(x, act_scaling_factor)
-        x, act_scaling_factor = self.quant_act_before_final_block(x, act_scaling_factor, None, None, None, None)
-        x, weight_scaling_factor = self.features.final_block(x, act_scaling_factor)
+                x = cur_unit(x)
+        x = self.quant_act_before_final_block(x)
+        x = self.features.final_block(self.features.final_bn(x))
         x = self.activatition_func(x)
-        x, act_scaling_factor = self.quant_act_int32_final(x, act_scaling_factor, weight_scaling_factor, None, None, None)
+        x = self.quant_act_int32_final(x)
 
         # the final pooling
-        x = self.features.final_pool(x, act_scaling_factor)
+        x = self.features.final_pool(x)
 
         # the output
-        x, act_scaling_factor = self.quant_act_output(x, act_scaling_factor, None, None, None, None)
-        x, act_scaling_factor = self.output(x, act_scaling_factor)
+        x = self.quant_act_output(x)
+        x = self.output(x)
 
         x = x.reshape(x.size(0), -1)
 
