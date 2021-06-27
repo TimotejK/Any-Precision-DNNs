@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn.functional as nnf
 from scipy import spatial
@@ -17,10 +19,15 @@ class KnnSelector(OptimizationSelector):
             with torch.no_grad():
                 acc = []
                 for bit_width in self.optimization_levels:
-                    input = input.cuda()
-                    target = target.cuda(non_blocking=True)
+                    if os.environ['CPU'] != 'True':
+                        input = input.cuda()
+                        target = target.cuda(non_blocking=True)
+                    else:
+                        input = input
+                        target = target
                     model.apply(lambda m: setattr(m, 'wbit', bit_width))
                     model.apply(lambda m: setattr(m, 'abit', bit_width))
+                    model.apply(lambda m: setattr(m, 'width_mult', bit_width))
                     output = model(input)
                     prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
                     for ind, (p, c, t) in enumerate(zip(prob, top_class, target)):

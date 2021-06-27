@@ -24,7 +24,7 @@ from optimization_selection.optimization_selector import OptimizationSelector
 from optimization_selection.random_selector import RandomSelector
 from optimization_selection.trivial_selector import ConstantSelector
 if os.environ['CPU'] != 'True':
-    from utils import setup_gpus
+    from local_utils import setup_gpus
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--results-dir', default='./results', help='results dir')
@@ -52,7 +52,11 @@ selection_cost = {
     2: 2,
     4: 3,
     8: 4,
-    32: 5
+    32: 5,
+    0.35: 0.35,
+    0.5: 0.5,
+    0.75: 0.75,
+    1.0: 1.0
 }
 
 
@@ -122,7 +126,7 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
                                               num_workers=args.workers,
                                               pin_memory=True)
 
-    bit_width_list = list(map(int, args.bit_width_list.split(',')))
+    bit_width_list = list(map(float, args.bit_width_list.split(',')))
     bit_width_list.sort()
     if os.environ['CPU'] != 'True':
         model = models.__dict__[args.model](bit_width_list, val_data.num_classes).cuda()
@@ -137,8 +141,12 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
                 checkpoint = torch.load(args.pretrain, map_location='cuda:{}'.format(best_gpu))
             else:
                 checkpoint = torch.load(args.pretrain, map_location=torch.device('cpu'))
-            model.load_state_dict(checkpoint['state_dict'], strict=False)
-            logging.info("loaded pretrain checkpoint '%s' (epoch %s)", args.pretrain, checkpoint['epoch'])
+            try:
+                model.load_state_dict(checkpoint['state_dict'], strict=False)
+                logging.info("loaded pretrain checkpoint '%s' (epoch %s)", args.pretrain, checkpoint['epoch'])
+            except:
+                model.load_state_dict(checkpoint['model'], strict=False)
+
         else:
             raise ValueError('Pretrained model path error!')
     else:
@@ -155,7 +163,6 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
         criterion_soft = CrossEntropyLossSoft()
 
     model.eval()
-
     optimization_selector.init(bit_width_list)
     optimization_selector.train(val_loader, val_data, model)
 
@@ -181,6 +188,7 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 
                 model.apply(lambda m: setattr(m, 'wbit', selection))
                 model.apply(lambda m: setattr(m, 'abit', selection))
+                model.apply(lambda m: setattr(m, 'width_mult', selection))
                 output = model(input)
                 loss = criterion(output, target)
                 prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
@@ -209,16 +217,16 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 
 
 if __name__ == '__main__':
-    print("Constant 1:")
-    test_optimization_selector_CV(ConstantSelector(1))
-    print("Constant 2:")
-    test_optimization_selector_CV(ConstantSelector(2))
-    print("Constant 4:")
-    test_optimization_selector_CV(ConstantSelector(4))
-    print("Constant 8:")
-    test_optimization_selector_CV(ConstantSelector(8))
-    print("Constant 32:")
-    test_optimization_selector_CV(ConstantSelector(32))
+    # print("Constant 1:")
+    # test_optimization_selector_CV(ConstantSelector(1))
+    # print("Constant 2:")
+    # test_optimization_selector_CV(ConstantSelector(2))
+    # print("Constant 4:")
+    # test_optimization_selector_CV(ConstantSelector(4))
+    # print("Constant 8:")
+    # test_optimization_selector_CV(ConstantSelector(8))
+    # print("Constant 32:")
+    # test_optimization_selector_CV(ConstantSelector(32))
     # print("Random:")
     # test_optimization_selector_CV(RandomSelector())
     # print("Random 1-4:")
@@ -241,4 +249,13 @@ if __name__ == '__main__':
     # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=False))
     # print("Best feature subspace:")
     # test_optimization_selector_CV(CorelatedFeaturesSelector(n_groups=10))
+
+    print("Constant 0.35:")
+    test_optimization_selector_CV(ConstantSelector(0.35))
+    print("Constant 0.5:")
+    test_optimization_selector_CV(ConstantSelector(0.5))
+    print("Constant 0.75:")
+    test_optimization_selector_CV(ConstantSelector(0.75))
+    print("Constant 1.0:")
+    test_optimization_selector_CV(ConstantSelector(1.0))
     pass

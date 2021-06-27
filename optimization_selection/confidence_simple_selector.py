@@ -1,3 +1,4 @@
+import os
 import random
 from typing import List
 
@@ -49,8 +50,12 @@ class ConfidenceSimpleSelector(OptimizationSelector):
                 acc = []
                 conf = []
                 for bit_width in self.optimization_levels:
-                    input = input.cuda()
-                    target = target.cuda(non_blocking=True)
+                    if os.environ['CPU'] != 'True':
+                        input = input.cuda()
+                        target = target.cuda(non_blocking=True)
+                    else:
+                        input = input
+                        target = target
                     model.apply(lambda m: setattr(m, 'wbit', bit_width))
                     model.apply(lambda m: setattr(m, 'abit', bit_width))
                     output = model(input)

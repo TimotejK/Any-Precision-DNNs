@@ -17,8 +17,8 @@ import models
 from models.losses import CrossEntropyLossSoft
 from datasets.data import get_dataset, get_transform
 from optimizer import get_optimizer_config, get_lr_scheduler
-from utils import setup_logging, setup_gpus, save_checkpoint
-from utils import AverageMeter, accuracy
+from local_utils import setup_logging, setup_gpus, save_checkpoint
+from local_utils import AverageMeter, accuracy
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--results-dir', default='./results', help='results dir')
@@ -41,6 +41,7 @@ args = parser.parse_args()
 
 
 def main():
+    # torch.autograd.set_detect_anomaly(True)
     hostname = socket.gethostname()
     setup_logging(os.path.join(args.results_dir, 'log_{}.txt'.format(hostname)))
     logging.info("running arguments: %s", args)
@@ -65,7 +66,10 @@ def main():
                                              num_workers=args.workers,
                                              pin_memory=True)
 
-    bit_width_list = list(map(int, args.bit_width_list.split(',')))
+    try:
+        bit_width_list = list(map(int, args.bit_width_list.split(',')))
+    except:
+        bit_width_list = list(map(float, args.bit_width_list.split(',')))
     bit_width_list.sort()
     model = models.__dict__[args.model](bit_width_list, train_data.num_classes).cuda()
 
@@ -150,7 +154,10 @@ def main():
 
 
 def forward(data_loader, model, criterion, criterion_soft, epoch, training=True, optimizer=None, sum_writer=None):
-    bit_width_list = list(map(int, args.bit_width_list.split(',')))
+    try:
+        bit_width_list = list(map(int, args.bit_width_list.split(',')))
+    except:
+        bit_width_list = list(map(float, args.bit_width_list.split(',')))
     bit_width_list.sort()
 
     losses = [AverageMeter() for _ in bit_width_list]
@@ -182,6 +189,7 @@ def forward(data_loader, model, criterion, criterion_soft, epoch, training=True,
             # train full-precision supervisor
             model.apply(lambda m: setattr(m, 'wbit', bit_width_list[-1]))
             model.apply(lambda m: setattr(m, 'abit', bit_width_list[-1]))
+            model.apply(lambda m: setattr(m, 'width_mult', bit_width_list[-1]))
             output = model(input)
             loss = criterion(output, target)
             loss.backward()
@@ -196,6 +204,7 @@ def forward(data_loader, model, criterion, criterion_soft, epoch, training=True,
                                               top5[:-1][::-1]):
                 model.apply(lambda m: setattr(m, 'wbit', bw))
                 model.apply(lambda m: setattr(m, 'abit', bw))
+                model.apply(lambda m: setattr(m, 'width_mult', bw))
                 output = model(input)
                 # hard cross entropy
                 # loss = criterion(output, target)
