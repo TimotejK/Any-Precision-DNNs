@@ -235,6 +235,8 @@ class ActivityRecognitionDataset(data.Dataset):
 
     def __getFeatures(self, split):
         data = np.loadtxt(self.root + '/' + split + '/X_' + split + '.txt', dtype=float)
+        columns = [1-1,2-1,3-1,4-1,5-1,6-1,38-1,39-1,40-1,41-1,42-1,43-1,44-1,45-1,46-1,78-1,79-1,80-1,81-1,82-1,83-1,84-1,85-1,86-1,118-1,119-1,120-1,121-1,122-1,123-1,124-1,125-1,126-1,158-1,159-1,160-1,161-1,162-1,163-1,164-1,165-1,166-1,198-1,199-1,200-1,201-1,202-1,214-1,215-1,227-1,228-1,240-1,241-1,253-1,254-1]
+        data = data[:, columns]
         return data
 
     def __getUser(self, split):
