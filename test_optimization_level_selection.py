@@ -164,8 +164,9 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 
     model.eval()
     optimization_selector.init(bit_width_list)
+    # optimization_selector.load('results/selectors/' + type(optimization_selector).__name__ + '.pkl')
     optimization_selector.train(val_loader, val_data, model)
-
+    optimization_selector.save('results/selectors/' + type(optimization_selector).__name__ + '.pkl')
     ca = 0
     conf = 0
     n = 0
@@ -239,8 +240,8 @@ if __name__ == '__main__':
     # test_optimization_selector_CV(KnnSelector(100))
     # print("Confidence hierarchical:")
     # test_optimization_selector_CV(ConfidenceHierarchicalSelector())
-    # print("LDA Accuracy hierarchical:")
-    # test_optimization_selector_CV(LDAAccuracySelector(use_features=True))
+    print("LDA Accuracy hierarchical:")
+    test_optimization_selector_CV(LDAAccuracySelector(use_features=True))
     # print("Simple conficence:")
     # test_optimization_selector_CV(ConfidenceSimpleSelector())
     # print("LDA hierarchical features:")
@@ -250,12 +251,12 @@ if __name__ == '__main__':
     # print("Best feature subspace:")
     # test_optimization_selector_CV(CorelatedFeaturesSelector(n_groups=10))
 
-    print("Constant 0.35:")
-    test_optimization_selector_CV(ConstantSelector(0.35))
-    print("Constant 0.5:")
-    test_optimization_selector_CV(ConstantSelector(0.5))
-    print("Constant 0.75:")
-    test_optimization_selector_CV(ConstantSelector(0.75))
-    print("Constant 1.0:")
-    test_optimization_selector_CV(ConstantSelector(1.0))
+    # print("Constant 0.35:")
+    # test_optimization_selector_CV(ConstantSelector(0.35))
+    # print("Constant 0.5:")
+    # test_optimization_selector_CV(ConstantSelector(0.5))
+    # print("Constant 0.75:")
+    # test_optimization_selector_CV(ConstantSelector(0.75))
+    # print("Constant 1.0:")
+    # test_optimization_selector_CV(ConstantSelector(1.0))
     pass

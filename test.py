@@ -123,6 +123,7 @@ def run_inference(data_loader, model, criterion, bit_width, val_data):
 
             model.apply(lambda m: setattr(m, 'wbit', bit_width))
             model.apply(lambda m: setattr(m, 'abit', bit_width))
+            model.apply(lambda m: setattr(m, 'width_mult', bit_width))
             output = model(input)
             loss = criterion(output, target)
             prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
@@ -172,6 +173,7 @@ def extract_classification_data(data_loader, model, criterion, bit_width_list, v
                 for bit_width in bit_width_list:
                     model.apply(lambda m: setattr(m, 'wbit', bit_width))
                     model.apply(lambda m: setattr(m, 'abit', bit_width))
+                    model.apply(lambda m: setattr(m, 'width_mult', bit_width))
                     output = model(input)
                     loss = criterion(output, target)
                     prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)

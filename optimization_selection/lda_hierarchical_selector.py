@@ -94,6 +94,7 @@ class LDAHierarchicalSelector(OptimizationSelector):
                         target = target
                     model.apply(lambda m: setattr(m, 'wbit', bit_width))
                     model.apply(lambda m: setattr(m, 'abit', bit_width))
+                    model.apply(lambda m: setattr(m, 'width_mult', bit_width))
                     output = model(input)
                     prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
                     for ind, (p, c, t) in enumerate(zip(prob, top_class, target)):

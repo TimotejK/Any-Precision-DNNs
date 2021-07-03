@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
 class LDAAccuracySelector(OptimizationSelector):
+    savable_parameters = ['target_acc', 'pca', 'lda', 'standardScaler', 'borders', 'n_groups', 'optimization_levels', 'intercepts', 'slopes']
     def __init__(self, n_groups=3, use_features=True):
         self.confidence = []
         self.train_acc = []
@@ -98,6 +99,7 @@ class LDAAccuracySelector(OptimizationSelector):
                         target = target
                     model.apply(lambda m: setattr(m, 'wbit', bit_width))
                     model.apply(lambda m: setattr(m, 'abit', bit_width))
+                    model.apply(lambda m: setattr(m, 'width_mult', bit_width))
                     output = model(input)
                     prob, top_class = nnf.softmax(output, dim=1).topk(1, dim=1)
                     for ind, (p, c, t) in enumerate(zip(prob, top_class, target)):
