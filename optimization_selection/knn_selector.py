@@ -42,6 +42,9 @@ class KnnSelector(OptimizationSelector):
 
                 self.train_acc += acc
         self.train_acc = np.array(self.train_acc)
+
+        self.select_viable_sizes()
+
         self.train_vectors_kd_tree = spatial.KDTree(self.train_vectors)
 
     def select_optimization_level(self, raw_data: list, features: list) -> float:
@@ -52,5 +55,14 @@ class KnnSelector(OptimizationSelector):
             acc += self.train_acc[nn]
         selected_index = acc.argmax()
         return self.optimization_levels[selected_index]
+
+    def select_viable_sizes(self):
+        accuracys = self.train_acc.mean(0)
+        cumulative = np.maximum.accumulate(accuracys)
+        cumulative = np.roll(cumulative, 1)
+        cumulative[0] = 0
+        viable = accuracys > cumulative
+        self.optimization_levels = np.array(self.optimization_levels)[viable]
+        self.train_acc = self.train_acc[:, viable]
 
     pass

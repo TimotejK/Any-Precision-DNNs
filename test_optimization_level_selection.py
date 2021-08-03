@@ -15,6 +15,7 @@ from datasets.activityRecognitionDataset import ActivityRecognitionDataset
 from datasets.data import get_dataset, get_transform
 from models.losses import CrossEntropyLossSoft
 from optimization_selection.confidence_hierarchical_selector import ConfidenceHierarchicalSelector
+from optimization_selection.previous_confidence_hierarchical_selector import PreviousConfidenceHierarchicalSelector
 from optimization_selection.confidence_simple_selector import ConfidenceSimpleSelector
 from optimization_selection.corelated_features_selector import CorelatedFeaturesSelector
 from optimization_selection.knn_selector import KnnSelector
@@ -126,7 +127,10 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
                                               num_workers=args.workers,
                                               pin_memory=True)
 
-    bit_width_list = list(map(float, args.bit_width_list.split(',')))
+    if "." in args.bit_width_list:
+        bit_width_list = list(map(float, args.bit_width_list.split(',')))
+    else:
+        bit_width_list = list(map(int, args.bit_width_list.split(',')))
     bit_width_list.sort()
     if os.environ['CPU'] != 'True':
         model = models.__dict__[args.model](bit_width_list, val_data.num_classes).cuda()
@@ -166,7 +170,7 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
     optimization_selector.init(bit_width_list)
     # optimization_selector.load('results/selectors/' + type(optimization_selector).__name__ + '.pkl')
     optimization_selector.train(val_loader, val_data, model)
-    optimization_selector.save('results/selectors/' + type(optimization_selector).__name__ + '.pkl')
+    # optimization_selector.save('results/selectors/' + type(optimization_selector).__name__ + '.pkl')
     ca = 0
     conf = 0
     n = 0
@@ -182,7 +186,7 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
                 selection_start_time = time.time()
                 selection = optimization_selector.select_optimization_level(input[0], test_data.get_features(i))
                 size_selection_time += time.time() - selection_start_time
-                selection_sum += selection
+                selection_sum += selection_cost[selection]
                 if os.environ['CPU'] != 'True':
                     input = input.cuda()
                     target = target.cuda(non_blocking=True)
@@ -218,34 +222,36 @@ def test_optimization_selector(optimization_selector: OptimizationSelector, val_
 
 
 if __name__ == '__main__':
-    # print("Constant 1:")
-    # test_optimization_selector_CV(ConstantSelector(1))
-    # print("Constant 2:")
-    # test_optimization_selector_CV(ConstantSelector(2))
-    # print("Constant 4:")
-    # test_optimization_selector_CV(ConstantSelector(4))
-    # print("Constant 8:")
-    # test_optimization_selector_CV(ConstantSelector(8))
-    # print("Constant 32:")
-    # test_optimization_selector_CV(ConstantSelector(32))
+    print("Constant 1:")
+    test_optimization_selector_CV(ConstantSelector(1))
+    print("Constant 2:")
+    test_optimization_selector_CV(ConstantSelector(2))
+    print("Constant 4:")
+    test_optimization_selector_CV(ConstantSelector(4))
+    print("Constant 8:")
+    test_optimization_selector_CV(ConstantSelector(8))
+    print("Constant 32:")
+    test_optimization_selector_CV(ConstantSelector(32))
     # print("Random:")
     # test_optimization_selector_CV(RandomSelector())
-    # print("Random 1-4:")
-    # test_optimization_selector_CV(RandomSelector([1, 2, 4]))
-    # print("Knn 20:")
-    # test_optimization_selector_CV(KnnSelector(20))
-    # print("Knn 40:")
-    # test_optimization_selector_CV(KnnSelector(40))
-    # print("Knn 100:")
-    # test_optimization_selector_CV(KnnSelector(100))
-    # print("Confidence hierarchical:")
-    # test_optimization_selector_CV(ConfidenceHierarchicalSelector())
+    # print("Random 1-3:")
+    # test_optimization_selector_CV(RandomSelector([0.35,0.5,0.75]))
+    print("Knn 20:")
+    test_optimization_selector_CV(KnnSelector(20))
+    print("Knn 40:")
+    test_optimization_selector_CV(KnnSelector(40))
+    print("Knn 100:")
+    test_optimization_selector_CV(KnnSelector(100))
+    print("Confidence hierarchical:")
+    test_optimization_selector_CV(ConfidenceHierarchicalSelector())
+    print("Previous confidence hierarchical:")
+    test_optimization_selector_CV(PreviousConfidenceHierarchicalSelector())
     print("LDA Accuracy hierarchical:")
     test_optimization_selector_CV(LDAAccuracySelector(use_features=True))
     # print("Simple conficence:")
     # test_optimization_selector_CV(ConfidenceSimpleSelector())
-    # print("LDA hierarchical features:")
-    # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=True, n_groups=5))
+    print("LDA hierarchical features:")
+    test_optimization_selector_CV(LDAHierarchicalSelector(use_features=True, n_groups=5))
     # print("LDA hierarchical raw signal:")
     # test_optimization_selector_CV(LDAHierarchicalSelector(use_features=False))
     # print("Best feature subspace:")
